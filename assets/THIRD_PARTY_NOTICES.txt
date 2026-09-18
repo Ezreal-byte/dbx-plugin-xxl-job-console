@@ -1,0 +1,15 @@
+XXL-JOB DBX Plugin - third-party notices
+
+DBX Go Plugin SDK: Apache License 2.0.
+Source: github.com/t8y2/dbx/plugins/sdk/go/dbx-plugin-sdk
+Vendored unmodified; provenance and original LICENSE are in backend/sdk.
+Full license is included as assets/SDK-LICENSE.txt.
+
+Vue: MIT License, Copyright (c) 2018-present Yuxi (Evan) You.
+Lucide: ISC License, Copyright (c) 2022 Lucide Contributors.
+Go golang.org/x/net: BSD 3-Clause License, Copyright The Go Authors.
+Go standard library: BSD 3-Clause License, Copyright The Go Authors.
+
+Full dependency license texts are included alongside this notice under assets/.
+This plugin communicates with XXL-JOB Admin over HTTP; XXL-JOB server source and
+server credentials are not included in the install package.
