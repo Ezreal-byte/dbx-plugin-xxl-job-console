@@ -7,5 +7,5 @@
   "source": "https://github.com/caichangqing1120/dbx-plugin-xxl-job",
   "homepage": "https://github.com/caichangqing1120/dbx-plugin-xxl-job",
   "license": "MIT",
-  "releaseNotes": "Initial public candidate with separate official Admin 2.3.x and 3.4.x API profiles."
+  "releaseNotes": "Align the default 3.4.x connection path with the official root deployment; clarify the 2.3.x path and retain custom paths."
 }

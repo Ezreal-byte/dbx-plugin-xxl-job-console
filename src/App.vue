@@ -162,7 +162,7 @@ onBeforeUnmount(() => { ++epoch; unsubscribe?.(); closeLog(); document.removeEve
   <div class="shell">
     <aside class="sidebar"><div class="brand"><Workflow :size="26" /><div><strong>XXL-JOB</strong><small>Admin {{ info?.adminVersion || '2.3 / 3.4' }}.x</small></div></div>
       <nav aria-label="主导航"><button v-for="item in visibleNavigation" :key="item.key" :class="{ active: view === item.key }" :disabled="working || !!jobEditor || !!groupEditor || optionsBusy" :title="item.label" @click="changeView(item.key)"><component :is="item.icon" :size="19" /><span>{{ item.label }}</span></button></nav>
-      <div class="sidebar-bottom"><small>PRIVATE WORKBENCH</small><span>v0.1.0</span></div>
+      <div class="sidebar-bottom"><small>PRIVATE WORKBENCH</small><span>v0.1.1</span></div>
     </aside>
     <main :inert="!!jobEditor || !!groupEditor || !!confirmation || !!discard || !!execution || !!detail || !!logState">
       <header class="topbar"><div class="connection-title"><span class="connection-dot" :class="{ connected: !!info && !authExpired }" /><strong>{{ info?.name || '未连接' }}</strong><span v-if="info?.environment" class="environment">{{ info.environment }}</span><span v-if="info" class="muted">{{ info.username }} · {{ info.admin ? '管理员' : '普通用户' }}</span><span v-if="info?.readOnly" class="badge warning"><Lock :size="12" />只读</span></div><button class="icon" aria-label="刷新" title="刷新" :disabled="!info || authExpired || loading || working || optionsBusy" @click="refresh"><RefreshCw :size="18" :class="{ spinning: loading }" /></button></header>

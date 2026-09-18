@@ -15,7 +15,7 @@ import (
 )
 
 const pluginID = "io.github.caichangqing1120.xxljob"
-const version = "0.1.0"
+const version = "0.1.1"
 
 type plugin struct {
 	lifecycle sync.Mutex

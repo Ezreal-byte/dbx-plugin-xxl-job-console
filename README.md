@@ -6,7 +6,7 @@ This is a separate public plugin (`io.github.caichangqing1120.xxljob`), not the 
 
 ## Connect
 
-Requires DBX `0.6.14` or newer, Host API `1`. Enter the Admin IP/domain, port, username, password and select `2.3.x` or `3.4.x`. The default context path is `/xxl-job-admin`; HTTPS, custom paths and DBX SSH/proxy/HTTP tunnels are supported. HTTP transmits the login password in clear text: use it only on a trusted private network.
+Requires DBX `0.6.14` or newer, Host API `1`. Enter the Admin IP/domain, port, username and password. New connections select `3.4.x` and `/` by default, matching the official 3.4.2 configuration. For stock `2.3.x`, select that version and change the application path to `/xxl-job-admin`. If the Admin is deployed at a custom path, enter that path instead. HTTPS and DBX SSH/proxy/HTTP tunnels are supported. HTTP transmits the login password in clear text: use it only on a trusted private network.
 
 The plugin authenticates to the selected Admin version and keeps the session cookie in memory. Redirects are never followed; expired sessions require reconnecting. Existing connections without a version selector retain the legacy `2.3.x` profile. For a new connection, the default is `3.4.x`.
 
@@ -29,10 +29,10 @@ go -C backend test -race ./...
 go -C backend vet ./...
 npm install --global @dbx-app/plugin-cli@0.1.9
 npm run package:all
-go run scripts/verify-package.go dist/io.github.caichangqing1120.xxljob-0.1.0-darwin-arm64.dbxp --handshake
+go run scripts/verify-package.go dist/io.github.caichangqing1120.xxljob-0.1.1-darwin-arm64.dbxp --handshake
 ```
 
-`package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, `SHA256SUMS-v0.1.0.txt` and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.
+`package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, `SHA256SUMS-v0.1.1.txt` and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.
 
 Local fixture testing uses synthetic data only (`node scripts/fixture-server.mjs`); no real Admin instance or production task was used. Do not enter a real password into the development host because `.dbx-dev` stores its fixture credentials in plaintext.
 

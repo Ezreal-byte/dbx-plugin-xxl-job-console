@@ -76,7 +76,10 @@ func newSession(c connection, runtime runtimeEndpoint) (*session, error) {
 		}
 		path := c.Config.ContextPath
 		if path == "" {
-			path = "/xxl-job-admin"
+			path = "/"
+			if adminVersion == "2.3" {
+				path = "/xxl-job-admin"
+			}
 		}
 		if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.ContainsAny(path, "?#%\\ \r\n\t") {
 			return nil, errors.New("应用路径必须以 / 开头，不得包含编码、查询参数或片段")
