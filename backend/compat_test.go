@@ -43,6 +43,10 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 			fmt.Fprint(w, `<html><a href="/jobgroup">Groups</a><a href="/jobinfo">Jobs</a></html>`)
 			return
 		}
+		if r.URL.Path == "/dashboard" {
+			fmt.Fprint(w, `<html><span class="info-box-number">8</span><span class="info-box-number">20</span><span class="info-box-number">2</span></html>`)
+			return
+		}
 		r.ParseForm()
 		switch r.URL.Path {
 		case "/jobgroup/pageList":
@@ -86,6 +90,16 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 			fmt.Fprint(w, `{"code":200,"data":null}`)
 		case "/jobinfo/insert", "/jobgroup/insert":
 			fmt.Fprint(w, `{"code":200,"data":null}`)
+		case "/chartInfo":
+			if r.Form.Get("startDate") != "2026-09-01 00:00:00" || r.Form.Get("endDate") != "2026-09-07 23:59:59" {
+				t.Errorf("modern chart form mismatch: %v", r.Form)
+			}
+			fmt.Fprint(w, `{"code":200,"data":{"triggerDayList":["2026-09-01"],"triggerDayCountRunningList":[0],"triggerDayCountSucList":[2],"triggerDayCountFailList":[1]}}`)
+		case "/jobinfo/nextTriggerTime":
+			if r.Form.Get("scheduleType") != "CRON" || r.Form.Get("scheduleConf") != "0 0/5 * * * ?" {
+				t.Errorf("modern cron form mismatch: %v", r.Form)
+			}
+			fmt.Fprint(w, `{"code":200,"data":["2026-09-20 12:00:00","2026-09-20 12:05:00","2026-09-20 12:10:00","2026-09-20 12:15:00","2026-09-20 12:20:00"]}`)
 		default:
 			t.Errorf("unexpected modern endpoint %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -108,6 +122,15 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 		if err != nil || value == nil {
 			t.Fatalf("%s: %v %v", method, value, err)
 		}
+	}
+	if overview, err := p.handle("xxljob/overview", params{ConnectionID: c.ID}); err != nil || overview.(map[string]int)["executors"] != 2 {
+		t.Fatalf("modern overview: %v %v", overview, err)
+	}
+	if report, err := p.handle("xxljob/report", params{ConnectionID: c.ID, Form: map[string]any{"startDate": "2026-09-01 00:00:00", "endDate": "2026-09-07 23:59:59"}}); err != nil || report.(map[string]any)["triggerDayList"] == nil {
+		t.Fatalf("modern report: %v %v", report, err)
+	}
+	if times, err := p.handle("xxljob/nextTriggerTime", params{ConnectionID: c.ID, Form: map[string]any{"scheduleType": "CRON", "scheduleConf": "0 0/5 * * * ?"}}); err != nil || len(times.([]any)) != 5 {
+		t.Fatalf("modern cron times: %v %v", times, err)
 	}
 	if _, err := p.handle("xxljob/logContent", params{ConnectionID: c.ID, Form: map[string]any{"logId": float64(11), "fromLineNum": float64(1)}}); err != nil {
 		t.Fatal(err)

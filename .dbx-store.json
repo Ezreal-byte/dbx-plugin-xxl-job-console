@@ -1,11 +1,11 @@
 {
-  "name": "XXL-JOB",
-  "description": "Manage official XXL-JOB Admin 2.3.x and 3.4.x jobs, executors and logs in DBX.",
+  "name": "XXL-JOB Console",
+  "description": "Manage XXL-JOB reports, jobs, logs, executors and users in DBX.",
   "icon": "assets/plugin.svg",
   "tags": ["xxl-job", "scheduler", "jobs"],
-  "permissions": [],
-  "source": "https://github.com/caichangqing1120/dbx-plugin-xxl-job",
-  "homepage": "https://github.com/caichangqing1120/dbx-plugin-xxl-job",
+  "permissions": ["host.workbench"],
+  "source": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
+  "homepage": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "license": "MIT",
-  "releaseNotes": "Align the default 3.4.x connection path with the official root deployment; clarify the 2.3.x path and retain custom paths."
+  "releaseNotes": "Dense bordered tables, labeled actions, more-menu job operations, inherited DBX fonts, and a live-log demo executor."
 }

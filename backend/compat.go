@@ -38,7 +38,7 @@ func (s *session) adaptRequest(method, path string, form url.Values) (string, ur
 		adapted[key] = append([]string(nil), values...)
 	}
 	switch method {
-	case "xxljob/jobs", "xxljob/logs":
+	case "xxljob/jobs", "xxljob/logs", "xxljob/users":
 		adapted.Set("offset", form.Get("start"))
 		adapted.Set("pagesize", form.Get("length"))
 		adapted.Del("start")
@@ -49,7 +49,7 @@ func (s *session) adaptRequest(method, path string, form url.Values) (string, ur
 					adapted.Set(key, "")
 				}
 			}
-		} else if _, ok := adapted["filterTime"]; !ok {
+		} else if method == "xxljob/logs" && adapted.Get("filterTime") == "" {
 			adapted.Set("filterTime", "")
 		}
 	case "xxljob/saveJob":
@@ -60,6 +60,14 @@ func (s *session) adaptRequest(method, path string, form url.Values) (string, ur
 		if form.Get("id") == "" {
 			path = "/jobgroup/insert"
 		}
+	case "xxljob/saveUser":
+		if form.Get("id") == "" {
+			path = "/user/insert"
+		}
+	case "xxljob/removeUser":
+		adapted.Set("ids[]", form.Get("id"))
+		adapted.Del("id")
+		path = "/user/delete"
 	case "xxljob/start", "xxljob/stop", "xxljob/removeJob", "xxljob/removeGroup":
 		if form.Get("id") == "" {
 			return "", nil, fmt.Errorf("%s 缺少任务或执行器 ID", method)

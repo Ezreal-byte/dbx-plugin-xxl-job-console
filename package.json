@@ -1,6 +1,6 @@
 {
-  "name": "xxl-job-dbx-plugin",
-  "version": "0.1.1",
+  "name": "dbx-plugin-xxl-job-console",
+  "version": "0.3.1",
   "private": false,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@lucide/vue": "1.46.0",
+    "echarts": "^6.0.0",
     "vue": "3.5.42"
   },
   "devDependencies": {

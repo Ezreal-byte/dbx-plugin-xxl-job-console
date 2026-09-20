@@ -14,8 +14,8 @@ import (
 	sdk "github.com/t8y2/dbx/plugins/sdk/go/dbx-plugin-sdk"
 )
 
-const pluginID = "io.github.caichangqing1120.xxljob"
-const version = "0.1.1"
+const pluginID = "io.dbx.xxljob-console"
+const version = "0.3.1"
 
 type plugin struct {
 	lifecycle sync.Mutex
@@ -45,8 +45,8 @@ func (p *plugin) Handle(_ sdk.RequestContext, method string, raw json.RawMessage
 	return result, nil
 }
 
-var reads = map[string]string{"xxljob/jobs": "/jobinfo/pageList", "xxljob/logs": "/joblog/pageList", "xxljob/logContent": "/joblog/logDetailCat", "xxljob/jobsByGroup": "/joblog/getJobsByGroup"}
-var mutations = map[string]string{"xxljob/start": "/jobinfo/start", "xxljob/stop": "/jobinfo/stop", "xxljob/trigger": "/jobinfo/trigger", "xxljob/removeJob": "/jobinfo/remove", "xxljob/saveJob": "/jobinfo/add", "xxljob/saveGroup": "/jobgroup/save", "xxljob/removeGroup": "/jobgroup/remove"}
+var reads = map[string]string{"xxljob/jobs": "/jobinfo/pageList", "xxljob/logs": "/joblog/pageList", "xxljob/logContent": "/joblog/logDetailCat", "xxljob/jobsByGroup": "/joblog/getJobsByGroup", "xxljob/users": "/user/pageList", "xxljob/report": "/chartInfo", "xxljob/nextTriggerTime": "/jobinfo/nextTriggerTime"}
+var mutations = map[string]string{"xxljob/start": "/jobinfo/start", "xxljob/stop": "/jobinfo/stop", "xxljob/trigger": "/jobinfo/trigger", "xxljob/removeJob": "/jobinfo/remove", "xxljob/saveJob": "/jobinfo/add", "xxljob/saveGroup": "/jobgroup/save", "xxljob/removeGroup": "/jobgroup/remove", "xxljob/saveUser": "/user/add", "xxljob/removeUser": "/user/remove"}
 
 func (p *plugin) handle(method string, v params) (any, error) {
 	switch method {
@@ -102,7 +102,7 @@ func (p *plugin) handle(method string, v params) (any, error) {
 	}
 	path, isRead := reads[method]
 	writePath, isWrite := mutations[method]
-	if !isRead && !isWrite && method != "xxljob/info" && method != "xxljob/groups" {
+	if !isRead && !isWrite && method != "xxljob/info" && method != "xxljob/groups" && method != "xxljob/overview" {
 		return nil, fmt.Errorf("不支持的操作 %s", method)
 	}
 	p.mu.RLock()
@@ -124,6 +124,20 @@ func (p *plugin) handle(method string, v params) (any, error) {
 	}
 	if method == "xxljob/groups" {
 		return s.groups()
+	}
+	if method == "xxljob/overview" {
+		if e := s.refreshAccess(); e != nil {
+			return nil, e
+		}
+		return s.overview()
+	}
+	if strings.Contains(method, "User") || method == "xxljob/users" {
+		if e := s.refreshAccess(); e != nil {
+			return nil, e
+		}
+		if !s.admin {
+			return nil, errors.New("仅管理员可以管理用户")
+		}
 	}
 	if isWrite {
 		if s.readOnly {
@@ -186,6 +200,17 @@ func (p *plugin) handle(method string, v params) (any, error) {
 			}
 		}
 	}
+	if method == "xxljob/removeUser" && form.Get("id") != "" {
+		if e := s.ensureNotCurrentUser(form.Get("id")); e != nil {
+			return nil, e
+		}
+	}
+	if method == "xxljob/saveUser" && form.Get("id") != "" {
+		if e := s.ensureNotCurrentUser(form.Get("id")); e != nil {
+			return nil, e
+		}
+		path = "/user/update"
+	}
 	if isWrite {
 		if e = validateMutation(method, form); e != nil {
 			return nil, e
@@ -193,7 +218,7 @@ func (p *plugin) handle(method string, v params) (any, error) {
 		if strings.Contains(method, "Group") && !s.admin {
 			return nil, errors.New("仅管理员可以管理执行器")
 		}
-		if !strings.Contains(method, "Group") && form.Get("id") != "" {
+		if !strings.Contains(method, "Group") && !strings.Contains(method, "User") && form.Get("id") != "" {
 			if e := s.permitJob(form.Get("id")); e != nil {
 				return nil, e
 			}
@@ -228,6 +253,14 @@ func (p *plugin) handle(method string, v params) (any, error) {
 	result, e := s.request(path, form, isWrite)
 	if e != nil {
 		return nil, e
+	}
+	if method == "xxljob/users" {
+		page := result.(map[string]any)
+		for _, item := range page["data"].([]any) {
+			if user, ok := item.(map[string]any); ok {
+				delete(user, "password")
+			}
+		}
 	}
 	if method == "xxljob/jobs" || method == "xxljob/logs" {
 		rows := result.(map[string]any)["data"].([]any)
@@ -279,14 +312,19 @@ func scalar(value any) (string, error) {
 }
 func buildForm(method string, input map[string]any, version ...string) (url.Values, error) {
 	fields := map[string]string{
-		"xxljob/jobs":        "start length jobGroup triggerStatus jobDesc executorHandler author",
-		"xxljob/jobsByGroup": "jobGroup",
-		"xxljob/logs":        "start length jobGroup jobId logStatus filterTime",
-		"xxljob/logContent":  "executorAddress triggerTime logId fromLineNum",
-		"xxljob/saveJob":     "id jobGroup scheduleType scheduleConf misfireStrategy jobDesc author alarmEmail executorRouteStrategy executorHandler executorParam executorBlockStrategy executorTimeout executorFailRetryCount glueType childJobId",
-		"xxljob/saveGroup":   "id appname title addressType addressList",
-		"xxljob/trigger":     "id executorParam addressList",
-		"xxljob/start":       "id", "xxljob/stop": "id", "xxljob/removeJob": "id", "xxljob/removeGroup": "id",
+		"xxljob/jobs":            "start length jobGroup triggerStatus jobDesc executorHandler author",
+		"xxljob/jobsByGroup":     "jobGroup",
+		"xxljob/logs":            "start length jobGroup jobId logStatus filterTime",
+		"xxljob/logContent":      "executorAddress triggerTime logId fromLineNum",
+		"xxljob/users":           "start length username role",
+		"xxljob/report":          "startDate endDate",
+		"xxljob/nextTriggerTime": "scheduleType scheduleConf",
+		"xxljob/saveUser":        "id username password role permission",
+		"xxljob/removeUser":      "id",
+		"xxljob/saveJob":         "id jobGroup scheduleType scheduleConf misfireStrategy jobDesc author alarmEmail executorRouteStrategy executorHandler executorParam executorBlockStrategy executorTimeout executorFailRetryCount glueType childJobId",
+		"xxljob/saveGroup":       "id appname title addressType addressList",
+		"xxljob/trigger":         "id executorParam addressList",
+		"xxljob/start":           "id", "xxljob/stop": "id", "xxljob/removeJob": "id", "xxljob/removeGroup": "id",
 	}
 	form := url.Values{}
 	for _, key := range strings.Fields(fields[method]) {
@@ -311,6 +349,9 @@ func buildForm(method string, input map[string]any, version ...string) (url.Valu
 			defaults["jobGroup"] = "0"
 			defaults["jobId"] = "0"
 			defaults["logStatus"] = "-1"
+		}
+		if method == "xxljob/users" {
+			defaults["role"] = "-1"
 		}
 		for key, value := range defaults {
 			if form.Get(key) == "" {
@@ -341,6 +382,23 @@ func buildForm(method string, input map[string]any, version ...string) (url.Valu
 					return nil, e
 				}
 			}
+		}
+	}
+	if method == "xxljob/report" {
+		start, e1 := time.ParseInLocation("2006-01-02 15:04:05", form.Get("startDate"), time.Local)
+		end, e2 := time.ParseInLocation("2006-01-02 15:04:05", form.Get("endDate"), time.Local)
+		if e1 != nil || e2 != nil || end.Before(start) || end.Sub(start) > 366*24*time.Hour {
+			return nil, errors.New("报表日期范围无效或超过一年")
+		}
+	}
+	if method == "xxljob/nextTriggerTime" {
+		if form.Get("scheduleType") != "CRON" || len(form.Get("scheduleConf")) == 0 || len(form.Get("scheduleConf")) > 128 {
+			return nil, errors.New("Cron 表达式无效")
+		}
+	}
+	if method == "xxljob/users" {
+		if e := intRange(form, "role", -1, 1); e != nil {
+			return nil, e
 		}
 	}
 	if method == "xxljob/jobsByGroup" {
@@ -399,6 +457,36 @@ func oneOf(value string, options ...string) bool {
 	return false
 }
 func validateMutation(method string, form url.Values) error {
+	if method == "xxljob/saveUser" {
+		if form.Get("id") != "" {
+			if e := intRange(form, "id", 1, 2147483647); e != nil {
+				return e
+			}
+		}
+		if e := required(form, "username"); e != nil {
+			return e
+		}
+		if len(form.Get("username")) < 4 || len(form.Get("username")) > 20 {
+			return errors.New("用户名长度必须为 4..20")
+		}
+		if form.Get("id") == "" && (len(form.Get("password")) < 4 || len(form.Get("password")) > 20) {
+			return errors.New("密码长度必须为 4..20")
+		}
+		if form.Get("password") != "" && (len(form.Get("password")) < 4 || len(form.Get("password")) > 20) {
+			return errors.New("密码长度必须为 4..20")
+		}
+		if !oneOf(form.Get("role"), "0", "1") {
+			return errors.New("用户角色无效")
+		}
+		for _, id := range strings.Split(form.Get("permission"), ",") {
+			if id != "" {
+				if _, e := strconv.ParseInt(id, 10, 32); e != nil {
+					return errors.New("执行器权限格式无效")
+				}
+			}
+		}
+		return nil
+	}
 	if method != "xxljob/saveJob" && method != "xxljob/saveGroup" {
 		return intRange(form, "id", 1, 2147483647)
 	}

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -90,7 +91,11 @@ func verify(name string, doHandshake bool) {
 		Entrypoints struct{ Backend struct{ Executable string } }
 	}
 	must(json.Unmarshal(files["manifest.json"], &manifest))
-	require(manifest.ID == "io.github.caichangqing1120.xxljob" && manifest.Version == "0.1.1", "plugin identity mismatch")
+	var sourceManifest struct{ ID, Version string }
+	sourceBytes, sourceErr := os.ReadFile("manifest.json")
+	must(sourceErr)
+	must(json.Unmarshal(sourceBytes, &sourceManifest))
+	require(manifest.ID == sourceManifest.ID && manifest.Version == sourceManifest.Version, "plugin identity mismatch")
 	exe := manifest.Entrypoints.Backend.Executable
 	require(strings.HasPrefix(exe, "bin/"+metadata.Target+"/"), "target and executable path mismatch")
 	require(len(files) == 12, "unexpected package entries")
@@ -133,15 +138,18 @@ func verify(name string, doHandshake bool) {
 	}
 	fmt.Printf("PASS %s: architecture, entrypoint, exact archive entries, SHA256 and metadata\n", metadata.Target)
 	if doHandshake {
-		handshake(binary)
+		handshake(binary, manifest.Version)
 	}
 }
 
-func handshake(binary []byte) {
+func handshake(binary []byte, version string) {
 	dir, err := os.MkdirTemp("", "xxljob-handshake-")
 	must(err)
 	defer os.RemoveAll(dir)
 	executable := dir + "/xxljob"
+	if runtime.GOOS == "windows" {
+		executable += ".exe"
+	}
 	must(os.WriteFile(executable, binary, 0o700))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -156,6 +164,6 @@ func handshake(binary []byte) {
 		}
 	}
 	must(json.Unmarshal(bytes.TrimSpace(output), &reply))
-	require(reply.Result.ProtocolVersion == 1 && reply.Result.Plugin.ID == "io.github.caichangqing1120.xxljob" && reply.Result.Plugin.Version == "0.1.1", "package handshake mismatch")
+	require(reply.Result.ProtocolVersion == 1 && reply.Result.Plugin.ID == "io.dbx.xxljob-console" && reply.Result.Plugin.Version == version, "package handshake mismatch")
 	fmt.Println("PASS packaged binary: plugin/initialize identity, version and protocol 1")
 }

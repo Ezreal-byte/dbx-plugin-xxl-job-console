@@ -1,8 +1,14 @@
-# XXL-JOB for DBX
+# XXL-JOB Console for DBX
 
 DBX workbench for official XXL-JOB Admin. Provides separate `2.3.x` and `3.4.x` API profiles; choose the Admin version when creating a connection. These profiles were checked against official `2.3.0` and `3.4.2` source respectively. The latest official release checked for this project is `3.4.2` (June 19, 2026). Other releases and customized distributions are not assumed compatible without testing.
 
-This is a separate public plugin (`io.github.caichangqing1120.xxljob`), not the internal plugin. It does not require direct database access or modify the XXL-JOB server.
+This community plugin is published by **Ezreal-byte** (catalog publisher ID `ezreal-byte`) as `io.dbx.xxljob-console`. It does not require direct database access or modify the XXL-JOB server.
+
+## Credits and changes
+
+Many thanks to **[caichangqing1120](https://github.com/caichangqing1120)** for the original [dbx-plugin-xxl-job](https://github.com/caichangqing1120/dbx-plugin-xxl-job), which this project builds on. The original repository and its license remain acknowledged here and in the source history.
+
+This version reorganizes the workbench into a 40 px top navigation with reports, jobs, logs, executors, and admin-only users. It adds a themed ECharts dashboard, seven-field Cron editor with server-calculated run times, sectioned job forms, reusable styled selects, translated interface strings, and live DBX theme and font updates. Dense bordered tables have labeled actions; common job actions are inline and registration nodes, edit, copy, and delete sit under More. It also adapts the Admin 2.3.x and 3.4.x report and user APIs, provides a dedicated live log page and new-tab action, and strengthens permission checks for log access. The plugin icon has been replaced with the user-provided SVG.
 
 ## Connect
 
@@ -10,16 +16,17 @@ Requires DBX `0.6.14` or newer, Host API `1`. Enter the Admin IP/domain, port, u
 
 The plugin authenticates to the selected Admin version and keeps the session cookie in memory. Redirects are never followed; expired sessions require reconnecting. Existing connections without a version selector retain the legacy `2.3.x` profile. For a new connection, the default is `3.4.x`.
 
-- View, filter and paginate jobs and scheduling logs; inspect execution logs.
+- View the scheduling report and date trend; filter and paginate jobs, logs, executors and users.
 - Create/update BEAN jobs, start/stop/trigger/delete a job after confirmation.
-- Admin users can manage executor groups. Non-admin users see only their authorized groups; writes are checked again by the backend.
+- Admin users can manage executor groups and user accounts. Non-admin users see only their authorized groups and do not see the user menu; writes are checked again by the backend.
+- Read running execution logs in a full workbench page with three-second cursor polling. The **New window** action uses DBX's `host.workbench` permission and requires the matching DBX host bridge change for distinct simultaneous log tabs.
 - Read-only connections prevent all changes. Ambiguous write results are not retried.
 
 The version profiles differ: `2.3.x` uses `/login`, legacy flat pagination and singular `id`; `3.4.x` uses `/auth/doLogin`, `Response<PageModel>` and `ids[]` for some writes. The plugin never probes a write endpoint to infer a version. An unsupported version is rejected before login. Version selection is not a guarantee for forks or untested deployments.
 
 ## Build and verify
 
-Requires Node.js 22+, Go 1.22+ and `@dbx-app/plugin-cli@0.1.9`.
+Requires Node.js 22+ and Go 1.22+.
 
 ```sh
 npm ci --ignore-scripts
@@ -27,14 +34,13 @@ npm test
 npm run build
 go -C backend test -race ./...
 go -C backend vet ./...
-npm install --global @dbx-app/plugin-cli@0.1.9
 npm run package:all
-go run scripts/verify-package.go dist/io.github.caichangqing1120.xxljob-0.1.1-darwin-arm64.dbxp --handshake
+go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.3.1-darwin-arm64.dbxp --handshake
 ```
 
-`package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, `SHA256SUMS-v0.1.1.txt` and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.
+`package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, `SHA256SUMS-v0.3.1.txt` and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.
 
-Local fixture testing uses synthetic data only (`node scripts/fixture-server.mjs`); no real Admin instance or production task was used. Do not enter a real password into the development host because `.dbx-dev` stores its fixture credentials in plaintext.
+Local fixture testing uses synthetic data (`node scripts/fixture-server.mjs`). A separate [10-minute live-log executor](demo/live-log-executor/README.md) can be used with a local XXL-JOB Admin 2.3.0 instance to check polling; it is not included in the `.dbxp` package. Do not enter a real password into the development host because `.dbx-dev` stores its fixture credentials in plaintext.
 
 ## Marketplace
 

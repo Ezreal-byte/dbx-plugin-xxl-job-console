@@ -3,11 +3,9 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
-const platform = process.platform === 'win32' ? 'windows' : process.platform;
-const hostTarget = `${platform}-${process.arch}`;
 const targets = ['darwin-arm64', 'darwin-x64', 'windows-arm64', 'windows-x64', 'linux-arm64', 'linux-x64'];
+const platform = process.platform === 'win32' ? 'windows' : process.platform;
 const requestedTarget = process.argv[2] || `${platform}-${process.arch}`;
-const cli = process.env.DBX_PLUGIN_CLI || 'dbx-plugin';
 if (requestedTarget !== 'all' && !targets.includes(requestedTarget)) {
   throw new Error(`Unsupported package target: ${requestedTarget}`);
 }
@@ -28,24 +26,10 @@ if (requestedTarget === 'all') {
 }
 
 for (const target of selectedTargets) {
-  const [os, arch] = target.split('-');
   const env = { ...process.env };
-  if (target === hostTarget) {
-    env.GOOS = os;
-    env.GOARCH = arch === 'x64' ? 'amd64' : arch;
-    env.CGO_ENABLED = '0';
-  } else {
-    delete env.GOOS;
-    delete env.GOARCH;
-    delete env.CGO_ENABLED;
-  }
   delete env.DBX_PLUGIN_SIGNING_KEY;
   delete env.DBX_PLUGIN_SIGNING_PUBLIC_KEY;
-  const command = target === hostTarget ? cli : 'go';
-  const args = target === hostTarget
-    ? ['package', '.', '--target', target, '--output-dir', 'dist']
-    : ['run', 'scripts/package-cross.go', '--target', target, '--output-dir', 'dist'];
-  const result = spawnSync(command, args, { stdio: 'inherit', shell: false, env });
+  const result = spawnSync('go', ['run', 'scripts/package-cross.go', '--target', target, '--output-dir', 'dist'], { stdio: 'inherit', shell: false, env });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
   const verify = spawnSync('go', ['run', 'scripts/verify-package.go', join('dist', `${manifest.id}-${manifest.version}-${target}.dbxp`)], { stdio: 'inherit', shell: false });
