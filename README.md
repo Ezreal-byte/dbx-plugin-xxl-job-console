@@ -10,7 +10,7 @@ Many thanks to **[caichangqing1120](https://github.com/caichangqing1120)** for t
 
 This version reorganizes the workbench into a 40 px top navigation with reports, jobs, logs, executors, and admin-only users. It adds a themed ECharts dashboard, seven-field Cron editor with server-calculated run times, sectioned job forms, reusable styled selects, translated interface strings, and live DBX theme and font updates. Dense bordered tables have labeled actions; common job actions are inline and registration nodes, edit, copy, and delete sit under More. It also adapts the Admin 2.3.x and 3.4.x report and user APIs, provides a dedicated live log page and new-tab action, and strengthens permission checks for log access. The plugin icon has been replaced with the user-provided SVG.
 
-Version `0.3.4` re-queries a log in each new workbench tab before reading it, retries a verified lookup if the shared log cache is replaced, and follows appended output to the bottom by default. Manual runs load the current configured job parameters before opening the execution form.
+Version `0.3.2` re-queries a log in each new workbench tab before reading it, retries a verified lookup if the shared log cache is replaced, and follows appended output to the bottom by default. Manual runs load the current configured job parameters before opening the execution form.
 
 ## Connect
 
@@ -37,7 +37,7 @@ npm run build
 go -C backend test -race ./...
 go -C backend vet ./...
 npm run package:all
-go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.3.4-windows-x64.dbxp --handshake
+go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.3.2-windows-x64.dbxp --handshake
 ```
 
 `package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, a versioned `SHA256SUMS` file and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.

@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "io.dbx.xxljob-console",
   "name": "XXL-JOB Console",
-  "version": "0.3.4",
+  "version": "0.3.2",
   "publisher": "ezreal-byte",
   "description": "XXL-JOB Admin workbench for verified 2.3.x and 3.4.x APIs",
   "icon": "assets/plugin.svg",
