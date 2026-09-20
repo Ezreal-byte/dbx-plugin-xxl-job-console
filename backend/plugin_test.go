@@ -87,6 +87,18 @@ func TestTriggerKeepsBlankOverrideAndLegacyForm(t *testing.T) {
 		t.Fatal(calls)
 	}
 }
+func TestTriggerPassesConfiguredParamToLegacyAdmin(t *testing.T) {
+	p, _ := connected(t, func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		if r.URL.Path != "/jobinfo/trigger" || r.Form.Get("executorParam") != "key=配置值" {
+			t.Errorf("configured execution parameter lost: %v", r.Form)
+		}
+		fmt.Fprint(w, `{"code":200,"content":null}`)
+	}, false)
+	if _, e := call(p, "xxljob/trigger", map[string]any{"connectionId": "a", "confirmed": true, "form": map[string]any{"id": 7, "executorParam": "key=配置值"}}); e != nil {
+		t.Fatal(e)
+	}
+}
 func TestReadMethodsUseOfficialStatusAndAuthor(t *testing.T) {
 	p, _ := connected(t, func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()

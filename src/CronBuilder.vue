@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { invoke } from './bridge';
 import { t } from './i18n';
 import { buildCron, cronFields, defaultCronRules, parseCron, type CronField, type CronMode } from './cron';
@@ -15,6 +15,7 @@ const rule = computed(() => rules.value[currentField.value]);
 const choices = computed(() => Array.from({ length: field.value.max - field.value.min + 1 }, (_, i) => field.value.min + i));
 const times = ref<string[]>([]), busy = ref(false), error = ref('');
 let request = 0;
+let previewTimer: ReturnType<typeof setTimeout> | undefined;
 const labels: Record<CronField, string> = { second: '秒', minute: '分钟', hour: '小时', day: '日', month: '月', week: '周', year: '年' };
 
 function changeMode(mode: CronMode) {
@@ -23,7 +24,11 @@ function changeMode(mode: CronMode) {
   if (currentField.value === 'week' && mode !== 'any') rules.value.day.mode = 'any';
 }
 watch(rules, () => { raw.value = buildCron(rules.value); }, { deep: true });
-watch(raw, () => { request++; times.value = []; error.value = ''; });
+watch(raw, () => {
+  request++; times.value = []; error.value = '';
+  if (previewTimer) clearTimeout(previewTimer);
+  if (raw.value.trim()) previewTimer = setTimeout(() => void preview(), 350);
+});
 async function preview(): Promise<boolean> {
   const current = ++request; busy.value = true; error.value = ''; times.value = [];
   try {
@@ -34,8 +39,9 @@ async function preview(): Promise<boolean> {
   } catch (e) { if (current === request) error.value = e instanceof Error ? e.message : String(e); return false; }
   finally { if (current === request) busy.value = false; }
 }
-async function apply() { if (await preview()) emit('apply', raw.value.trim()); }
+async function apply() { if (previewTimer) clearTimeout(previewTimer); previewTimer = undefined; if (await preview()) emit('apply', raw.value.trim()); }
 onMounted(() => { if (raw.value.trim()) void preview(); });
+onBeforeUnmount(() => { request++; if (previewTimer) clearTimeout(previewTimer); });
 </script>
 
 <template>
@@ -52,8 +58,8 @@ onMounted(() => { if (raw.value.trim()) void preview(); });
       <div class="cron-specific" role="group" :aria-label="t('指定')"><label v-for="number in choices" :key="number"><input v-model="rule.values" type="checkbox" :value="number" @change="changeMode('specific')" />{{ currentField === 'second' || currentField === 'minute' ? String(number).padStart(2, '0') : number }}</label></div>
       <label class="cron-expression">{{ t('Cron 表达式') }}<input v-model="raw" class="mono" spellcheck="false" /></label>
       <p v-if="error" class="cron-error" role="alert">{{ error }}</p>
-      <div class="cron-preview"><strong>{{ t('最近五次运行时间') }}</strong><ol v-if="times.length"><li v-for="time in times" :key="time">{{ time }}</li></ol><p v-else class="muted">{{ t('点击预览，使用调度中心计算时间') }}</p></div>
+      <div class="cron-preview"><strong>{{ t('最近五次运行时间') }}</strong><ol v-if="times.length"><li v-for="time in times" :key="time">{{ time }}</li></ol><p v-else class="muted">{{ t(busy ? '计算中' : '修改后自动计算最近运行时间') }}</p></div>
     </div>
-    <footer><button type="button" :disabled="busy" @click="preview">{{ busy ? t('计算中') : t('预览') }}</button><button class="primary" type="button" :disabled="busy" @click="apply">{{ t('应用') }}</button></footer>
+    <footer><button class="primary" type="button" :disabled="busy" @click="apply">{{ t('应用') }}</button></footer>
   </div>
 </template>

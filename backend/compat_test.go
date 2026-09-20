@@ -84,7 +84,7 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 			}
 			fmt.Fprint(w, `{"code":200,"data":null}`)
 		case "/jobinfo/trigger":
-			if r.Form.Get("id") != "7" || !r.Form.Has("executorParam") || !r.Form.Has("addressList") || r.Form.Get("addressList") != "" {
+			if r.Form.Get("id") != "7" || r.Form.Get("executorParam") != "configured-value" || !r.Form.Has("addressList") || r.Form.Get("addressList") != "" {
 				t.Errorf("modern trigger form mismatch: %v", r.Form)
 			}
 			fmt.Fprint(w, `{"code":200,"data":null}`)
@@ -140,7 +140,11 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 		if method == "xxljob/removeGroup" {
 			id = 3
 		}
-		if _, err := p.handle(method, params{ConnectionID: c.ID, Confirmed: true, Form: map[string]any{"id": float64(id)}}); err != nil {
+		form := map[string]any{"id": float64(id)}
+		if method == "xxljob/trigger" {
+			form["executorParam"] = "configured-value"
+		}
+		if _, err := p.handle(method, params{ConnectionID: c.ID, Confirmed: true, Form: form}); err != nil {
 			t.Fatalf("%s: %v", method, err)
 		}
 	}

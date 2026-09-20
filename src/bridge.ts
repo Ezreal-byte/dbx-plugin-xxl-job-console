@@ -1,4 +1,4 @@
-export type Context = { connectionId?: string; page?: string; log?: Record<string, unknown> };
+export type Context = { connectionId?: string; page?: string; tabTitle?: string; log?: Record<string, unknown> };
 declare global {
   interface Window {
     dbxPlugin?: {
