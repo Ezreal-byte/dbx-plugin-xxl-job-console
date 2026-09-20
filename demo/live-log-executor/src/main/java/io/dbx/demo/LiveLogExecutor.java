@@ -22,7 +22,7 @@ public final class LiveLogExecutor {
         executor.setLogRetentionDays(1);
         XxlJobExecutor.registJobHandler("dbxLiveLogDemo", new IJobHandler() {
             @Override public void execute() throws Exception {
-                XxlJobHelper.log("DBX live-log demo started: jobId={}, time={}", XxlJobHelper.getJobId(), LocalDateTime.now());
+                XxlJobHelper.log("DBX live-log demo started: jobId={}, param={}, time={}", XxlJobHelper.getJobId(), XxlJobHelper.getJobParam(), LocalDateTime.now());
                 for (int second = 1; second <= 600; second++) {
                     if (Thread.currentThread().isInterrupted()) {
                         XxlJobHelper.log("DBX live-log demo interrupted at second {}", second);

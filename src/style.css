@@ -203,3 +203,31 @@ html,body,#app,button,input,select,textarea,.ui-select-menu,.job-more-menu{font-
 .date-filter{position:relative;display:inline-flex!important;align-items:center;min-width:198px}.date-filter input{width:198px!important}
 .date-filter>span{position:absolute;left:10px;top:50%;transform:translateY(-50%);z-index:1;pointer-events:none;color:var(--muted);font-size:12px}
 .date-filter:has(>span) input:not(:focus){color:transparent}.date-filter:focus-within>span{display:none}
+
+/* Keep the four primary job actions on one line at every table scroll position. */
+.jobs-table{min-width:1320px}
+.jobs-table th.actions,.jobs-table td.actions{width:340px;min-width:340px;max-width:none}
+.jobs-table td,.jobs-table td code,.jobs-table td .badge{font-weight:400}
+.row-action{background:var(--soft);border-color:var(--line);color:var(--fg);font-weight:500}
+.row-action:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 12%,var(--surface));border-color:var(--accent);color:var(--accent)}
+.row-action.action-run{background:color-mix(in srgb,#19865a 12%,var(--surface));border-color:color-mix(in srgb,#19865a 22%,var(--line));color:color-mix(in srgb,#2bb779 64%,var(--fg))}
+.row-action.action-run:hover:not(:disabled){background:color-mix(in srgb,#19865a 21%,var(--surface));color:color-mix(in srgb,#2bb779 77%,var(--fg))}
+.row-action.action-log{background:color-mix(in srgb,var(--accent) 11%,var(--surface));border-color:color-mix(in srgb,var(--accent) 24%,var(--line));color:var(--accent)}
+.row-action.action-log:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 19%,var(--surface))}
+.row-action.action-toggle{background:color-mix(in srgb,#ba7725 11%,var(--surface));border-color:color-mix(in srgb,#ba7725 24%,var(--line));color:color-mix(in srgb,#dc9a44 65%,var(--fg))}
+.row-action.action-toggle:hover:not(:disabled){background:color-mix(in srgb,#ba7725 20%,var(--surface));color:color-mix(in srgb,#dc9a44 78%,var(--fg))}
+.row-action.danger-text{background:color-mix(in srgb,var(--color-destructive,#b5363d) 9%,var(--surface));border-color:color-mix(in srgb,var(--color-destructive,#b5363d) 21%,var(--line))}
+.row-action.danger-text:hover:not(:disabled){background:color-mix(in srgb,var(--color-destructive,#b5363d) 16%,var(--surface))}
+.table-wrap tbody tr{cursor:pointer}
+.table-wrap tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.table-wrap tbody tr.selected-row td,.table-wrap tbody tr.selected-row:hover td{background:color-mix(in srgb,var(--accent) 11%,var(--surface))}
+.table-wrap tbody tr.selected-row td:first-child{box-shadow:inset 3px 0 var(--accent)}
+.floating-toast{position:fixed;z-index:140;top:54px;right:18px;width:min(440px,calc(100vw - 36px));padding:11px 12px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;background:var(--surface);color:var(--fg);box-shadow:0 14px 38px #0003}
+.floating-toast.error{border-left-color:var(--color-destructive,#b5363d)}
+.toast-head{display:flex;align-items:center;gap:8px;min-width:0}
+.toast-head>svg{flex:none;color:var(--accent)}.floating-toast.error .toast-head>svg{color:var(--color-destructive,#b5363d)}
+.toast-head strong{font-size:12px;font-weight:650;line-height:1.45;min-width:0;flex:1}
+.toast-head .icon{width:24px;height:24px;min-height:24px;padding:2px;flex:none}
+.toast-detail-button{border:0;background:transparent;color:var(--accent);font-size:11px;white-space:nowrap;padding:3px 4px}
+.toast-detail-button:hover{background:var(--soft);color:var(--accent)}
+.toast-detail{margin:10px 0 0;padding:9px;max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);border-radius:6px;font-size:11px;line-height:1.5;font-family:var(--dbx-plugin-mono-font-family,monospace)}

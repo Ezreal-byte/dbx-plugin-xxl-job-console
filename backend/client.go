@@ -250,7 +250,8 @@ func (s *session) raw(method, path string, form url.Values, write bool) ([]byte,
 		return nil, s.expire(write)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, uncertain(write, fmt.Sprintf("HTTP %d", resp.StatusCode))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return nil, uncertain(write, httpFailureDetail(resp.StatusCode, method, path, body))
 	}
 	body, e := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024+1))
 	if e != nil || len(body) > 4*1024*1024 {
@@ -260,6 +261,24 @@ func (s *session) raw(method, path string, form url.Values, write bool) ([]byte,
 		return nil, s.expire(write)
 	}
 	return body, nil
+}
+func httpFailureDetail(status int, method, path string, body []byte) string {
+	detail := fmt.Sprintf("HTTP %d · %s %s", status, method, path)
+	var response map[string]any
+	if json.Unmarshal(body, &response) == nil {
+		for _, key := range []string{"msg", "message", "error"} {
+			if value, ok := response[key].(string); ok {
+				value = strings.TrimSpace(value)
+				if value != "" {
+					if len([]rune(value)) > 300 {
+						value = string([]rune(value)[:300])
+					}
+					return detail + " · " + value
+				}
+			}
+		}
+	}
+	return detail
 }
 func (s *session) request(path string, form url.Values, write bool) (any, error) {
 	raw, e := s.raw("POST", path, form, write)

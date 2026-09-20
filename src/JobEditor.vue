@@ -6,7 +6,7 @@ import { t } from './i18n';
 import CronBuilder from './CronBuilder.vue';
 import UiSelect from './UiSelect.vue';
 
-const props = defineProps<{ job: Job; groups: Group[]; connectionId: string; busy: boolean; serverError?: string }>();
+const props = defineProps<{ job: Job; groups: Group[]; connectionId: string; busy: boolean; suspended?: boolean; serverError?: string }>();
 const emit = defineEmits<{ save: [job: Job]; close: [] }>();
 const original = JSON.stringify(props.job);
 const form = ref<Job>({ ...props.job });
@@ -61,6 +61,6 @@ function save() {
         <label>{{ t('失败重试次数') }}<input v-model.number="form.executorFailRetryCount" type="number" min="0" max="2147483647" step="1" required :disabled="busy" /></label>
       </div></section>
     </div><footer><button type="button" :disabled="busy" @click="emit('close')">{{ t('取消') }}</button><button class="primary" type="button" :disabled="busy" @click="save"><Save :size="16" />{{ t('保存') }}</button></footer></div>
-    <Teleport to="body"><CronBuilder v-if="cronOpen && form.scheduleType === 'CRON'" :style="cronStyle" :value="form.scheduleConf" :connection-id="connectionId" @apply="value => { form.scheduleConf = value; cronOpen = false; }" @close="cronOpen = false" /></Teleport>
+    <Teleport to="body"><CronBuilder v-if="cronOpen && !suspended && form.scheduleType === 'CRON'" :style="cronStyle" :value="form.scheduleConf" :connection-id="connectionId" @apply="value => { form.scheduleConf = value; cronOpen = false; }" @close="cronOpen = false" /></Teleport>
   </section>
 </template>
