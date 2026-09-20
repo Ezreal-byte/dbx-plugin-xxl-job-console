@@ -8,6 +8,15 @@ export function setLocale(value?: string) {
 }
 type Language = 'en' | 'zh-TW' | 'ja' | 'ko' | 'es' | 'it' | 'pt';
 const entries: Record<string, [string, string, string, string, string, string, string]> = {
+  '更多': ['More','更多','その他','더 보기','Más','Altro','Mais'],
+  '注册节点': ['Registered nodes','註冊節點','登録ノード','등록 노드','Nodos registrados','Nodi registrati','Nós registrados'],
+  '暂无注册节点': ['No registered nodes','暫無註冊節點','登録ノードなし','등록된 노드 없음','Sin nodos registrados','Nessun nodo registrato','Sem nós registrados'],
+  '编辑': ['Edit','編輯','編集','편집','Editar','Modifica','Editar'],
+  '删除': ['Delete','刪除','削除','삭제','Eliminar','Elimina','Excluir'],
+  '复制': ['Copy','複製','複製','복사','Copiar','Copia','Copiar'],
+  '副本': ['Copy','副本','コピー','복사본','Copia','Copia','Cópia'],
+  '请选择开始时间': ['Select start time','請選擇開始時間','開始時刻を選択','시작 시간 선택','Seleccione la hora de inicio','Seleziona ora iniziale','Selecione a hora inicial'],
+  '请选择结束时间': ['Select end time','請選擇結束時間','終了時刻を選択','종료 시간 선택','Seleccione la hora de fin','Seleziona ora finale','Selecione a hora final'],
   '基础配置': ['Basic settings','基本設定','基本設定','기본 설정','Configuración básica','Impostazioni di base','Configurações básicas'],
   '任务配置': ['Job settings','任務設定','ジョブ設定','작업 설정','Configuración de tarea','Impostazioni attività','Configurações da tarefa'],
   '高级配置': ['Advanced settings','進階設定','詳細設定','고급 설정','Configuración avanzada','Impostazioni avanzate','Configurações avançadas'],

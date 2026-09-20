@@ -1,6 +1,6 @@
 {
   "name": "dbx-plugin-xxl-job-console",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": false,
   "type": "module",
   "scripts": {

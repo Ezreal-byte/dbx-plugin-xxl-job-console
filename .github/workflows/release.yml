@@ -4,6 +4,10 @@ on:
   release:
     types: [published]
 
+concurrency:
+  group: xxl-job-console-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -25,7 +29,6 @@ jobs:
       - run: npm test
       - run: go -C backend test -race ./...
       - run: go -C backend vet ./...
-      - run: npm install --global @dbx-app/plugin-cli@0.1.9
       - run: npm run package:all
       - name: Verify native package protocol
         run: |
@@ -36,4 +39,4 @@ jobs:
       - name: Upload unsigned candidates
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" dist/*.dbxp dist/*.artifact.json dist/SHA256SUMS-*.txt dist/release-candidates.json
+        run: gh release upload "${GITHUB_REF_NAME}" dist/*.dbxp dist/*.artifact.json dist/SHA256SUMS-*.txt dist/release-candidates.json --clobber

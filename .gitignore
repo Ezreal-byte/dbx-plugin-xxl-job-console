@@ -7,3 +7,6 @@ output/
 backend/bin/
 .DS_Store
 .dbx-dev/
+demo/live-log-executor/target/
+demo/live-log-executor/logs/
+demo/live-log-executor/executor.*.log

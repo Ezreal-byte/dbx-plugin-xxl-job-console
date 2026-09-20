@@ -180,3 +180,26 @@ button.danger:active:not(:disabled){background:#711e23;color:#fff}
 .cron-preview{min-height:83px}.cron-preview ol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px;font-size:11px}
 .cron-popover footer{flex:none;padding:8px 14px}
 @media(max-width:650px){.job-fields{grid-template-columns:1fr}.cron-specific{grid-template-columns:repeat(6,minmax(0,1fr))}.cron-preview ol{grid-template-columns:1fr}.report-cards .card-icon{display:none}}
+
+/* Dense bordered data grids and readable actions. */
+html,body,#app,button,input,select,textarea,.ui-select-menu,.job-more-menu{font-family:var(--dbx-plugin-ui-font-family,"PingFang SC","Microsoft YaHei",sans-serif)}
+.table-wrap table{border-collapse:separate;border-spacing:0}
+.table-wrap th,.table-wrap td{padding:6px 10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);line-height:1.35;height:36px}
+.table-wrap th:last-child,.table-wrap td:last-child{border-right:0}
+.table-wrap .actions{min-width:0;overflow:visible}
+.table-wrap .badge{padding:3px 6px}
+.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;white-space:nowrap}
+.row-action{height:27px;min-height:27px;padding:0 7px;gap:4px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--fg);font-size:11px;font-weight:550}
+.row-action:hover:not(:disabled){background:var(--soft);border-color:var(--line);color:var(--accent)}
+.row-action.danger-text{color:var(--color-destructive,#b5363d)}
+.row-action.danger-text:hover:not(:disabled){color:var(--color-destructive,#b5363d)}
+.row-action svg{flex:none}
+.job-more{display:inline-flex}
+.job-more-menu{position:fixed;z-index:90;display:grid;min-width:150px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--surface);box-shadow:0 12px 32px #0003}
+.job-more-menu button{display:flex;justify-content:flex-start;width:100%;height:33px;min-height:33px;padding:0 9px;border:0;border-radius:5px;background:transparent;color:var(--fg);font-size:12px}
+.job-more-menu button:hover:not(:disabled){background:var(--soft);color:var(--accent)}
+.job-more-menu button.danger-text{color:var(--color-destructive,#b5363d)}
+.registered-nodes{display:grid;gap:7px;margin:0;padding:0;list-style:none}.registered-nodes li{padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--soft)}
+.date-filter{position:relative;display:inline-flex!important;align-items:center;min-width:198px}.date-filter input{width:198px!important}
+.date-filter>span{position:absolute;left:10px;top:50%;transform:translateY(-50%);z-index:1;pointer-events:none;color:var(--muted);font-size:12px}
+.date-filter:has(>span) input:not(:focus){color:transparent}.date-filter:focus-within>span{display:none}

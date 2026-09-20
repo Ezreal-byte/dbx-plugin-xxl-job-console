@@ -1,5 +1,5 @@
 {
-  "name": "XXL-JOB",
+  "name": "XXL-JOB Console",
   "description": "Manage XXL-JOB reports, jobs, logs, executors and users in DBX.",
   "icon": "assets/plugin.svg",
   "tags": ["xxl-job", "scheduler", "jobs"],
@@ -7,5 +7,5 @@
   "source": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "homepage": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "license": "MIT",
-  "releaseNotes": "Refine the workbench layout, add themed ECharts reports and a Cron builder, and improve localization."
+  "releaseNotes": "Dense bordered tables, labeled actions, more-menu job operations, inherited DBX fonts, and a live-log demo executor."
 }
