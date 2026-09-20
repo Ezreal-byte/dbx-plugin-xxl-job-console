@@ -89,6 +89,12 @@ func TestNormalUserCannotAccessOtherExecutorsOrTasks(t *testing.T) {
 	if _, e := call(p, "xxljob/saveGroup", map[string]any{"connectionId": "a", "confirmed": true, "form": map[string]any{"appname": "demo-executor", "title": "Demo", "addressType": 0}}); e == nil {
 		t.Fatal("ordinary group management accepted")
 	}
+	if _, e := call(p, "xxljob/users", map[string]any{"connectionId": "a"}); e == nil {
+		t.Fatal("ordinary user list accepted")
+	}
+	if _, e := call(p, "xxljob/saveUser", map[string]any{"connectionId": "a", "confirmed": true, "form": map[string]any{"username": "test", "password": "pass", "role": 0}}); e == nil {
+		t.Fatal("ordinary user management accepted")
+	}
 	groups, e := call(p, "xxljob/groups", map[string]any{"connectionId": "a"})
 	if e != nil || len(groups.([]group)) != 1 {
 		t.Fatal(groups, e)

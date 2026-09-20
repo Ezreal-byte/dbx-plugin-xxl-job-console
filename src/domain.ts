@@ -1,4 +1,5 @@
 export type Form = Record<string, string | number>;
+import { locale } from './i18n';
 export type Job = {
   id?: number; jobGroup: number; scheduleType: string; scheduleConf: string; misfireStrategy: string; jobDesc: string; author: string;
   alarmEmail: string; executorRouteStrategy: string; executorHandler: string;
@@ -78,7 +79,7 @@ export function triggerMillis(value: string | number): number {
 }
 export function timeLabel(value?: string | number): string {
   if (!value) return '-';
-  try { return new Date(triggerMillis(value)).toLocaleString('zh-CN', { hour12: false }); } catch { return String(value); }
+  try { return new Date(triggerMillis(value)).toLocaleString(locale.value, { hour12: false }); } catch { return String(value); }
 }
 export function filterTime(start: string, end: string): string {
   if (!start && !end) return '';

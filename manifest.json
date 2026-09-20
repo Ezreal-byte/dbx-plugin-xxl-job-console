@@ -1,11 +1,12 @@
 {
   "manifest_version": 1,
-  "id": "io.github.caichangqing1120.xxljob",
+  "id": "io.dbx.xxljob-console",
   "name": "XXL-JOB",
-  "version": "0.1.1",
-  "publisher": "caichangqing1120",
+  "version": "0.3.0",
+  "publisher": "Ezreal-byte",
   "description": "XXL-JOB Admin workbench for verified 2.3.x and 3.4.x APIs",
   "icon": "assets/plugin.svg",
+  "permissions": ["host.workbench"],
   "engines": { "dbx": ">=0.6.14", "host_api": "1" },
   "entrypoints": {
     "backend": { "executable": "bin/dbx-plugin-xxl-job-dbx-plugin" },
@@ -14,7 +15,7 @@
   "contributions": [
     {
       "type": "connection-provider",
-      "id": "io.github.caichangqing1120.xxljob.connection",
+      "id": "io.dbx.xxljob-console.connection",
       "label": "XXL-JOB 连接",
       "icon": "assets/plugin.svg",
       "database_type": "xxl-job-dbx-plugin",
@@ -30,14 +31,50 @@
         { "key": "environment", "label": "环境标识", "type": "text", "binding": "config" },
         { "key": "read_only", "label": "只读模式", "type": "boolean", "default": false, "binding": "config" }
       ],
-      "workbench": "io.github.caichangqing1120.xxljob.workbench",
+      "workbench": "io.dbx.xxljob-console.workbench",
       "capabilities": ["test", "connect", "disconnect"]
     },
     {
       "type": "workbench",
-      "id": "io.github.caichangqing1120.xxljob.workbench",
+      "id": "io.dbx.xxljob-console.workbench",
       "label": "XXL-JOB 工作台",
       "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "workbench",
+      "id": "io.dbx.xxljob-console.log",
+      "label": "执行日志",
+      "icon": "assets/plugin.svg"
     }
-  ]
+  ],
+  "localizations": {
+    "en": { "contributions": {
+      "io.dbx.xxljob-console.connection": { "label": "XXL-JOB connection", "fields": { "display_name": { "label": "Connection name" }, "host": { "label": "Host / domain" }, "port": { "label": "Port" }, "username": { "label": "Username" }, "password": { "label": "Password" }, "admin_version": { "label": "Admin version", "options": { "3.4": "3.4.x (default path /)", "2.3": "2.3.x (default path /xxl-job-admin)" } }, "scheme": { "label": "Protocol", "options": { "http": "HTTP (internal network)", "https": "HTTPS" } }, "context_path": { "label": "App path (use /xxl-job-admin for 2.3.x)" }, "environment": { "label": "Environment" }, "read_only": { "label": "Read only" } } },
+      "io.dbx.xxljob-console.workbench": { "label": "XXL-JOB workbench" }, "io.dbx.xxljob-console.log": { "label": "Execution log" }
+    } },
+    "zh-TW": { "contributions": {
+      "io.dbx.xxljob-console.connection": { "label": "XXL-JOB 連線", "fields": { "display_name": { "label": "連線名稱" }, "host": { "label": "主機 / 網域" }, "port": { "label": "連接埠" }, "username": { "label": "使用者名稱" }, "password": { "label": "密碼" }, "admin_version": { "label": "Admin 版本", "options": { "3.4": "3.4.x（預設路徑 /）", "2.3": "2.3.x（預設路徑 /xxl-job-admin）" } }, "scheme": { "label": "協定", "options": { "http": "HTTP（內部網路）", "https": "HTTPS" } }, "context_path": { "label": "應用程式路徑（2.3.x 請使用 /xxl-job-admin）" }, "environment": { "label": "環境標籤" }, "read_only": { "label": "唯讀模式" } } },
+      "io.dbx.xxljob-console.workbench": { "label": "XXL-JOB 工作台" }, "io.dbx.xxljob-console.log": { "label": "執行日誌" }
+    } },
+    "ja": { "contributions": {
+      "io.dbx.xxljob-console.connection": { "label": "XXL-JOB 接続", "fields": { "display_name": { "label": "接続名" }, "host": { "label": "ホスト / ドメイン" }, "port": { "label": "ポート" }, "username": { "label": "ユーザー名" }, "password": { "label": "パスワード" }, "admin_version": { "label": "Admin バージョン", "options": { "3.4": "3.4.x（既定パス /）", "2.3": "2.3.x（既定パス /xxl-job-admin）" } }, "scheme": { "label": "プロトコル", "options": { "http": "HTTP（内部ネットワーク）", "https": "HTTPS" } }, "context_path": { "label": "アプリパス（2.3.x は /xxl-job-admin）" }, "environment": { "label": "環境" }, "read_only": { "label": "読み取り専用" } } },
+      "io.dbx.xxljob-console.workbench": { "label": "XXL-JOB ワークベンチ" }, "io.dbx.xxljob-console.log": { "label": "実行ログ" }
+    } },
+    "ko": { "contributions": {
+      "io.dbx.xxljob-console.connection": { "label": "XXL-JOB 연결", "fields": { "display_name": { "label": "연결 이름" }, "host": { "label": "호스트 / 도메인" }, "port": { "label": "포트" }, "username": { "label": "사용자 이름" }, "password": { "label": "비밀번호" }, "admin_version": { "label": "Admin 버전", "options": { "3.4": "3.4.x (기본 경로 /)", "2.3": "2.3.x (기본 경로 /xxl-job-admin)" } }, "scheme": { "label": "프로토콜", "options": { "http": "HTTP (내부망)", "https": "HTTPS" } }, "context_path": { "label": "앱 경로 (2.3.x: /xxl-job-admin)" }, "environment": { "label": "환경" }, "read_only": { "label": "읽기 전용" } } },
+      "io.dbx.xxljob-console.workbench": { "label": "XXL-JOB 작업 공간" }, "io.dbx.xxljob-console.log": { "label": "실행 로그" }
+    } },
+    "es": { "contributions": {
+      "io.dbx.xxljob-console.connection": { "label": "Conexión XXL-JOB", "fields": { "display_name": { "label": "Nombre de conexión" }, "host": { "label": "Servidor / dominio" }, "port": { "label": "Puerto" }, "username": { "label": "Usuario" }, "password": { "label": "Contraseña" }, "admin_version": { "label": "Versión Admin", "options": { "3.4": "3.4.x (ruta /)", "2.3": "2.3.x (ruta /xxl-job-admin)" } }, "scheme": { "label": "Protocolo", "options": { "http": "HTTP (red interna)", "https": "HTTPS" } }, "context_path": { "label": "Ruta de aplicación (2.3.x: /xxl-job-admin)" }, "environment": { "label": "Entorno" }, "read_only": { "label": "Solo lectura" } } },
+      "io.dbx.xxljob-console.workbench": { "label": "Consola XXL-JOB" }, "io.dbx.xxljob-console.log": { "label": "Registro de ejecución" }
+    } },
+    "it": { "contributions": {
+      "io.dbx.xxljob-console.connection": { "label": "Connessione XXL-JOB", "fields": { "display_name": { "label": "Nome connessione" }, "host": { "label": "Host / dominio" }, "port": { "label": "Porta" }, "username": { "label": "Nome utente" }, "password": { "label": "Password" }, "admin_version": { "label": "Versione Admin", "options": { "3.4": "3.4.x (percorso /)", "2.3": "2.3.x (percorso /xxl-job-admin)" } }, "scheme": { "label": "Protocollo", "options": { "http": "HTTP (rete interna)", "https": "HTTPS" } }, "context_path": { "label": "Percorso app (2.3.x: /xxl-job-admin)" }, "environment": { "label": "Ambiente" }, "read_only": { "label": "Sola lettura" } } },
+      "io.dbx.xxljob-console.workbench": { "label": "Console XXL-JOB" }, "io.dbx.xxljob-console.log": { "label": "Registro di esecuzione" }
+    } },
+    "pt": { "contributions": {
+      "io.dbx.xxljob-console.connection": { "label": "Conexão XXL-JOB", "fields": { "display_name": { "label": "Nome da conexão" }, "host": { "label": "Host / domínio" }, "port": { "label": "Porta" }, "username": { "label": "Usuário" }, "password": { "label": "Senha" }, "admin_version": { "label": "Versão Admin", "options": { "3.4": "3.4.x (caminho /)", "2.3": "2.3.x (caminho /xxl-job-admin)" } }, "scheme": { "label": "Protocolo", "options": { "http": "HTTP (rede interna)", "https": "HTTPS" } }, "context_path": { "label": "Caminho do app (2.3.x: /xxl-job-admin)" }, "environment": { "label": "Ambiente" }, "read_only": { "label": "Somente leitura" } } },
+      "io.dbx.xxljob-console.workbench": { "label": "Console XXL-JOB" }, "io.dbx.xxljob-console.log": { "label": "Log de execução" }
+    } }
+  }
 }

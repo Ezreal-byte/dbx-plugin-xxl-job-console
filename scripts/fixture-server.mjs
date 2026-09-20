@@ -12,6 +12,7 @@ let groups = [
   { id: 1, appname: 'demo-executor', title: '示例执行器', addressType: 1, addressList: 'http://demo-node.invalid:9999/' },
   { id: 2, appname: 'report-executor', title: '报表执行器', addressType: 0, addressList: '' },
 ];
+let users = [{ id: 1, username: 'admin', role: 1, permission: '', password: null }, { id: 2, username: 'operator', role: 0, permission: '1', password: null }];
 const sessions = new Map(), requests = [];
 const escape = value => String(value).replace(/[&"<>]/g, c => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' }[c]));
 const numeric = ['id', 'jobGroup', 'executorTimeout', 'executorFailRetryCount', 'addressType'];
@@ -27,7 +28,7 @@ const server = createServer(async (req, res) => {
   const form = Object.fromEntries(new URLSearchParams(body)), route = path.slice(prefix.length) || '/';
   const token = (req.headers.cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith('XXL_JOB_LOGIN_IDENTITY='))?.split('=')[1];
   const username = sessions.get(token);
-  requests.push({ method: req.method, path, form: route === '/login' ? { userName: form.userName, password: '[REDACTED]' } : form, username: username || null });
+  requests.push({ method: req.method, path, form: 'password' in form ? { ...form, password: '[REDACTED]' } : form, username: username || null });
   if (requests.length > 1000) requests.shift();
   if (route === '/login') {
     if (req.method !== 'POST' || Object.keys(form).sort().join(',') !== 'password,userName' || !['admin', 'operator'].includes(form.userName) || form.password !== 'fixture-only-password') return json({ code: 500, msg: 'Invalid demo credentials' });
@@ -39,7 +40,7 @@ const server = createServer(async (req, res) => {
   const authorized = g => username === 'admin' || g === 1;
   if (route === '/') {
     res.setHeader('Content-Type', 'text/html');
-    return res.end(`<a href="${prefix}/jobinfo">Tasks</a>${username === 'admin' ? `<a href="${prefix}/jobgroup">Groups</a>` : ''}`);
+    return res.end(`<a href="${prefix}/jobinfo">Tasks</a>${username === 'admin' ? `<a href="${prefix}/jobgroup">Groups</a>` : ''}<span class="info-box-number">${jobs.length}</span><span class="info-box-number">42</span><span class="info-box-number">1</span>`);
   }
   if (route === '/jobinfo') {
     res.setHeader('Content-Type', 'text/html');
@@ -48,6 +49,17 @@ const server = createServer(async (req, res) => {
   const page = rows => json({ recordsTotal: rows.length, recordsFiltered: rows.length, data: rows.slice(Number(form.start || 0), Number(form.start || 0) + Number(form.length || 25)) });
   if (Object.keys(form).some(k => ['jobCron', 'jobStatus', 'order', 'taskLimit', 'appName'].includes(k))) return json({ code: 500, msg: 'Custom fields are not stock 2.3.0' });
   if (route === '/jobgroup/pageList') return username === 'admin' ? page(groups) : json({ code: 500, msg: 'No permission' });
+  if (route === '/chartInfo') {
+    if (!/^\d{4}-\d{2}-\d{2} 00:00:00$/.test(form.startDate || '') || !/^\d{4}-\d{2}-\d{2} 23:59:59$/.test(form.endDate || '')) return json({ code: 500, msg: 'Expected full date-time range' });
+    const triggerDayList = Array.from({ length: 14 }, (_, i) => { const d = new Date(Date.now() - (13 - i) * 86400000); return d.toISOString().slice(0, 10); });
+    return json({ code: 200, content: { triggerDayList, triggerDayCountRunningList: triggerDayList.map((_, i) => i + 4), triggerDayCountSucList: triggerDayList.map((_, i) => i + 2), triggerDayCountFailList: triggerDayList.map(() => 2) } });
+  }
+  if (route === '/jobinfo/nextTriggerTime') return json({ code: 200, content: ['2026-09-20 12:00:00','2026-09-20 12:05:00','2026-09-20 12:10:00','2026-09-20 12:15:00','2026-09-20 12:20:00'] });
+  if (route === '/user/pageList') return username === 'admin' ? page(users.filter(u => (!form.username || u.username.includes(form.username)) && (Number(form.role) < 0 || u.role === Number(form.role)))) : json({ code: 500, msg: 'No permission' });
+  if (route.startsWith('/user/') && username !== 'admin') return json({ code: 500, msg: 'No permission' });
+  if (route === '/user/add') { users.push({ id: Math.max(...users.map(u => u.id)) + 1, username: form.username, role: Number(form.role), permission: form.permission, password: null }); return json({ code: 200, content: null }); }
+  if (route === '/user/update') { users = users.map(u => u.id === Number(form.id) ? { ...u, username: form.username, role: Number(form.role), permission: form.permission } : u); return json({ code: 200, content: null }); }
+  if (route === '/user/remove') { users = users.filter(u => u.id !== Number(form.id)); return json({ code: 200, content: null }); }
   if (route === '/joblog/getJobsByGroup') return json({ code: 200, content: jobs.filter(j => j.jobGroup === Number(form.jobGroup) && authorized(j.jobGroup)) });
   if (route === '/jobinfo/pageList') return page(jobs.filter(j => authorized(j.jobGroup) && (Number(form.jobGroup) < 1 || j.jobGroup === Number(form.jobGroup)) && (Number(form.triggerStatus) === -1 || j.triggerStatus === Number(form.triggerStatus)) && j.jobDesc.includes(form.jobDesc || '') && j.executorHandler.includes(form.executorHandler || '') && j.author.includes(form.author || '')));
   if (route === '/joblog/pageList') {
