@@ -26,6 +26,8 @@ The plugin authenticates to the selected Admin version and keeps the session coo
 
 The version profiles differ: `2.3.x` uses `/login`, legacy flat pagination and singular `id`; `3.4.x` uses `/auth/doLogin`, `Response<PageModel>` and `ids[]` for some writes. The plugin never probes a write endpoint to infer a version. An unsupported version is rejected before login. Version selection is not a guarantee for forks or untested deployments.
 
+Admin `3.1.0` and `3.2.0` sit between the two profiles: they keep the legacy `/login`, flat pagination and `start`/`length` fields, but they declare the executor `appname` and `title` filters as required. The plugin therefore always sends both as empty strings, which the 2.3.x and 3.3+ optional declarations and every version's `appname != null and appname != ''` SQL guard treat as no filter. Connect to such a hybrid Admin with the `2.3.x` profile.
+
 ## Build and verify
 
 Requires Node.js 22+ and Go 1.22+.

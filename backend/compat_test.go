@@ -164,3 +164,59 @@ func TestModernRejectsLegacyPaginationResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Admin 3.1.0 and 3.2.0 declare appname and title as required on /jobgroup/pageList, so omitting
+// them fails binding with HTTP 400 before the controller runs. Both profiles must send them, and
+// every version guards the SQL filter with `appname != null and appname != ''`.
+func TestGroupListSendsFiltersRequiredByAdmin31(t *testing.T) {
+	for _, tc := range []struct {
+		name, version, body string
+	}{
+		{"2.3 profile for Admin 3.1.0/3.2.0", "2.3", `{"recordsTotal":1,"recordsFiltered":1,"data":[{"id":3,"appname":"test-app","title":"Test","addressType":0,"addressList":""}]}`},
+		{"3.4 profile", "3.4", `{"code":200,"data":{"total":1,"data":[{"id":3,"appname":"test-app","title":"Test","addressType":0,"addressList":""}]}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.URL.Path == "/login" || r.URL.Path == "/auth/doLogin":
+					http.SetCookie(w, &http.Cookie{Name: "XXL_JOB_LOGIN_IDENTITY", Value: "fixture", Path: "/"})
+					fmt.Fprint(w, `{"code":200}`)
+				case r.URL.Path == "/":
+					fmt.Fprint(w, `<html><a href="/jobgroup">Groups</a></html>`)
+				case r.URL.Path == "/jobgroup/pageList":
+					r.ParseForm()
+					// Spring answers a missing required @RequestParam with HTTP 400 and an empty body.
+					for _, key := range []string{"appname", "title"} {
+						if !r.Form.Has(key) {
+							t.Errorf("required filter %s omitted: %v", key, r.Form)
+							w.WriteHeader(http.StatusBadRequest)
+							return
+						}
+					}
+					fmt.Fprint(w, tc.body)
+				default:
+					t.Errorf("unexpected route %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+			c := officialConnection(t, srv.URL, "admin", "test-only")
+			c.Config.AdminVersion = tc.version
+			s, err := newSession(c, runtimeEndpoint{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.close()
+			if err := s.probe(); err != nil {
+				t.Fatal(err)
+			}
+			groups, err := s.groups()
+			if err != nil {
+				t.Fatalf("executor list failed against Admin 3.1.0 contract: %v", err)
+			}
+			if len(groups) != 1 || groups[0].ID != 3 || groups[0].Title != "Test" {
+				t.Fatalf("unexpected groups %+v", groups)
+			}
+		})
+	}
+}
