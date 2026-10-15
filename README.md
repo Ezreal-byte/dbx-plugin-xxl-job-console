@@ -12,6 +12,8 @@ This version reorganizes the workbench into a 40 px top navigation with reports,
 
 Version `0.3.2` re-queries a log in each new workbench tab before reading it, retries a verified lookup if the shared log cache is replaced, and follows appended output to the bottom by default. Manual runs load the current configured job parameters before opening the execution form.
 
+Version `0.3.3` fixes missing required executor filters on Admin 3.1.0, updates release metadata for DBX Store scanning, and adds Windows/Linux CI with native package protocol checks. See [release notes](RELEASE_NOTES_0.3.3.md) for compatibility details.
+
 ## Connect
 
 Requires DBX `0.6.14` or newer, Host API `1`. Enter the Admin IP/domain, port, username and password. New connections select `3.4.x` and `/` by default, matching the official 3.4.2 configuration. For stock `2.3.x`, select that version and change the application path to `/xxl-job-admin`. If the Admin is deployed at a custom path, enter that path instead. HTTPS and DBX SSH/proxy/HTTP tunnels are supported. HTTP transmits the login password in clear text: use it only on a trusted private network.
@@ -39,7 +41,7 @@ npm run build
 go -C backend test -race ./...
 go -C backend vet ./...
 npm run package:all
-go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.3.2-windows-x64.dbxp --handshake
+go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.3.3-windows-x64.dbxp --handshake
 ```
 
 `package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, a versioned `SHA256SUMS` file and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.

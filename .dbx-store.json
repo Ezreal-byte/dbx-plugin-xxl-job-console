@@ -7,5 +7,5 @@
   "source": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "homepage": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "license": "MIT",
-  "releaseNotes": "Refine dense tables with row selection and labeled actions; add floating, expandable error messages and live Cron previews. Manual runs now use configured job parameters. Independent live-log tabs verify the selected log and follow new output automatically."
+  "releaseNotes": "Fix HTTP 400 when listing executors on Admin 3.1.0 by sending required empty appname/title filters. Preserve unfiltered results, permission checks and both existing API profiles; this query fix does not establish full Admin 3.2.0 SSO compatibility. Emit plugin + artifacts release metadata for DBX Store scanning and add Windows/Linux CI with native package handshake checks."
 }

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: windows-latest
+            target: windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run build
+      - run: go -C backend test -race ./...
+      - run: go -C backend vet ./...
+      - run: go -C backend/sdk test ./...
+      - name: Verify native package protocol
+        shell: bash
+        env:
+          PACKAGE_TARGET: ${{ matrix.target }}
+        run: |
+          node scripts/package.mjs "$PACKAGE_TARGET"
+          id=$(node -p 'require("./manifest.json").id')
+          version=$(node -p 'require("./manifest.json").version')
+          go run scripts/verify-package.go "dist/${id}-${version}-${PACKAGE_TARGET}.dbxp" --handshake
