@@ -26,6 +26,8 @@ The plugin authenticates to the selected Admin version and keeps the session coo
 
 The version profiles differ: `2.3.x` uses `/login`, legacy flat pagination and singular `id`; `3.4.x` uses `/auth/doLogin`, `Response<PageModel>` and `ids[]` for some writes. The plugin never probes a write endpoint to infer a version. An unsupported version is rejected before login. Version selection is not a guarantee for forks or untested deployments.
 
+Admin `3.1.0` uses the legacy login and pagination contracts but requires the executor `appname` and `title` filters. Version `0.3.3` sends both as empty strings to keep the listing unfiltered; use the `2.3.x` profile for this deployment. This fixes executor listing, without claiming full verification of every Admin 3.1.0 operation. Official `3.2.0` requires the same filters but introduces XXL-SSO authentication; this query fix does not establish end-to-end 3.2.0 compatibility with either existing profile. See the upstream [3.1.0 controller](https://github.com/xuxueli/xxl-job/blob/3.1.0/xxl-job-admin/src/main/java/com/xxl/job/admin/controller/JobGroupController.java) and [3.2.0 SSO configuration](https://github.com/xuxueli/xxl-job/blob/3.2.0/xxl-job-admin/src/main/java/com/xxl/job/admin/web/xxlsso/XxlSsoConfig.java).
+
 ## Build and verify
 
 Requires Node.js 22+ and Go 1.22+.

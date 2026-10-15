@@ -146,7 +146,11 @@ func (s *session) groups() ([]group, error) {
 	}
 	result := []group{}
 	for start := 0; start < 10000; start += 100 {
-		form := url.Values{"start": {strconv.Itoa(start)}, "length": {"100"}}
+		// Admin 3.1.0 and 3.2.0 declare appname and title as required, so omitting them fails binding
+		// with HTTP 400 before the controller runs. The optional 2.3.x and 3.3+ declarations bind an
+		// empty value, and every version guards the filter with `appname != null and appname != ''`,
+		// so empty keeps the unfiltered listing on all of them.
+		form := url.Values{"start": {strconv.Itoa(start)}, "length": {"100"}, "appname": {""}, "title": {""}}
 		path, form, e := s.adaptRequest("xxljob/jobs", "/jobgroup/pageList", form)
 		if e != nil {
 			return nil, e
