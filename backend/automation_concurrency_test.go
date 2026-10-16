@@ -156,7 +156,7 @@ func TestTunnelSessionReuseAndRuntimeChange(t *testing.T) {
 	if e != nil || reused != s {
 		t.Fatal("session not reused", e)
 	}
-	if state.logins != 1 {
+	if state.loginCount() != 1 {
 		t.Fatal("relogged in")
 	}
 	changed := endpoint

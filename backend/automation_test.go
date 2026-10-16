@@ -24,6 +24,28 @@ type automationFixture struct {
 	modern    bool
 }
 
+func (s *automationFixture) recordedWrites() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.writes...)
+}
+
+func (s *automationFixture) recordedForm(index int) url.Values {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	form := url.Values{}
+	for key, values := range s.forms[index] {
+		form[key] = append([]string(nil), values...)
+	}
+	return form
+}
+
+func (s *automationFixture) loginCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.logins
+}
+
 func fixturePlugin(t *testing.T, modern bool) (*plugin, connection, *automationFixture) {
 	t.Helper()
 	state := &automationFixture{jobs: map[int64]map[string]any{}, modern: modern}
@@ -220,7 +242,7 @@ func TestAutomationDiscoveryAndDefaultDeny(t *testing.T) {
 	if !mcp(p, c, "list_jobs", nil).IsError {
 		t.Fatal("default allowed")
 	}
-	if state.logins != 0 {
+	if state.loginCount() != 0 {
 		t.Fatal("discovery/denial dialed server")
 	}
 	grant(t, p, c)
@@ -275,33 +297,33 @@ func TestPreviewExecuteBothAdminProfiles(t *testing.T) {
 			grant(t, p, c, "start_job", "stop_job", "trigger_job", "update_job", "copy_job", "delete_job")
 			args := map[string]any{"job_id": 7, "executor_id": 1}
 			key := previewTool(t, p, c, "start_job", args)
-			if len(state.writes) != 0 {
+			if len(state.recordedWrites()) != 0 {
 				t.Fatal("preview wrote")
 			}
 			args["preview_token"] = key
 			resultObject(t, mcp(p, c, "start_job", args))
-			if len(state.writes) != 1 {
-				t.Fatal(state.writes)
+			if len(state.recordedWrites()) != 1 {
+				t.Fatal(state.recordedWrites())
 			}
-			if !mcp(p, c, "start_job", args).IsError || len(state.writes) != 1 {
+			if !mcp(p, c, "start_job", args).IsError || len(state.recordedWrites()) != 1 {
 				t.Fatal("token replay")
 			}
 			update := map[string]any{"job_id": 7, "executor_id": 1, "fields": map[string]any{"jobDesc": "Changed"}}
 			update["preview_token"] = previewTool(t, p, c, "update_job", update)
 			resultObject(t, mcp(p, c, "update_job", update))
-			if state.forms[1].Get("executorParam") != "password=secret-value" {
+			if state.recordedForm(1).Get("executorParam") != "password=secret-value" {
 				t.Fatal("patch wiped omitted parameter")
 			}
 			run := map[string]any{"job_id": 7, "executor_id": 1, "parameter_mode": "override", "executor_param": ""}
 			run["preview_token"] = previewTool(t, p, c, "trigger_job", run)
 			resultObject(t, mcp(p, c, "trigger_job", run))
-			if !state.forms[2].Has("executorParam") || state.forms[2].Get("executorParam") != "" {
+			if form := state.recordedForm(2); !form.Has("executorParam") || form.Get("executorParam") != "" {
 				t.Fatal("empty override lost")
 			}
 			copy := map[string]any{"job_id": 7, "executor_id": 1, "fields": map[string]any{}}
 			copy["preview_token"] = previewTool(t, p, c, "copy_job", copy)
 			resultObject(t, mcp(p, c, "copy_job", copy))
-			if state.forms[3].Has("triggerStatus") || state.forms[3].Has("id") {
+			if form := state.recordedForm(3); form.Has("triggerStatus") || form.Has("id") {
 				t.Fatal("copy inherited identity/schedule")
 			}
 		})
@@ -346,7 +368,7 @@ func TestPreviewBindingExpiryChangesAndReadonly(t *testing.T) {
 				})
 			}
 			args["preview_token"] = key
-			if !mcp(p, c, "start_job", args).IsError || len(state.writes) != 0 {
+			if !mcp(p, c, "start_job", args).IsError || len(state.recordedWrites()) != 0 {
 				t.Fatal("invalid execution accepted")
 			}
 		})
@@ -363,12 +385,12 @@ func TestPublicUIRequiresBoundPreview(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(state.writes) != 0 {
+	if len(state.recordedWrites()) != 0 {
 		t.Fatal("UI preview wrote")
 	}
 	token := v.(map[string]any)["previewToken"].(string)
-	if _, e = p.handle("xxljob/start", params{ConnectionID: c.ID, Form: form, Confirmed: true, PreviewToken: token}); e != nil || len(state.writes) != 1 {
-		t.Fatal(e, state.writes)
+	if _, e = p.handle("xxljob/start", params{ConnectionID: c.ID, Form: form, Confirmed: true, PreviewToken: token}); e != nil || len(state.recordedWrites()) != 1 {
+		t.Fatal(e, state.recordedWrites())
 	}
 }
 func TestColdMCPReadsLogsWithoutPriorList(t *testing.T) {
@@ -398,8 +420,8 @@ func TestExecutorReferencesAndTriggerAddresses(t *testing.T) {
 	if !mcp(p, c, "trigger_job", map[string]any{"job_id": 7, "executor_id": 1, "parameter_mode": "saved", "address": "http://attacker/"}).IsError {
 		t.Fatal("arbitrary executor address accepted")
 	}
-	if len(state.writes) != 0 {
-		t.Fatal(state.writes)
+	if len(state.recordedWrites()) != 0 {
+		t.Fatal(state.recordedWrites())
 	}
 }
 func TestAmbiguousWriteIsNotRetried(t *testing.T) {
@@ -411,10 +433,10 @@ func TestAmbiguousWriteIsNotRetried(t *testing.T) {
 	state.dropWrite = true
 	state.mu.Unlock()
 	result := mcp(p, c, "trigger_job", args)
-	if !result.IsError || !strings.Contains(result.Content[0]["text"], "结果未知") || len(state.writes) != 1 {
-		t.Fatal(result, state.writes)
+	if !result.IsError || !strings.Contains(result.Content[0]["text"], "结果未知") || len(state.recordedWrites()) != 1 {
+		t.Fatal(result, state.recordedWrites())
 	}
-	if !mcp(p, c, "trigger_job", args).IsError || len(state.writes) != 1 {
+	if !mcp(p, c, "trigger_job", args).IsError || len(state.recordedWrites()) != 1 {
 		t.Fatal("ambiguous write replayed")
 	}
 }
@@ -428,8 +450,8 @@ func TestNonAdminCannotReadGlobalOrForeignData(t *testing.T) {
 		}
 	}
 	resultObject(t, mcp(p, c, "list_jobs", map[string]any{"executor_id": 1}))
-	if len(state.writes) != 0 {
-		t.Fatal(state.writes)
+	if len(state.recordedWrites()) != 0 {
+		t.Fatal(state.recordedWrites())
 	}
 }
 func TestTunnelDoesNotUseOriginalTarget(t *testing.T) {
@@ -444,7 +466,7 @@ func TestTunnelDoesNotUseOriginalTarget(t *testing.T) {
 	if !mcp(p, c, "list_jobs", nil).IsError {
 		t.Fatal("missing tunnel accepted")
 	}
-	if state.logins != 1 {
-		t.Fatal("tunnel fell back to direct login", state.logins)
+	if state.loginCount() != 1 {
+		t.Fatal("tunnel fell back to direct login", state.loginCount())
 	}
 }
