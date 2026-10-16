@@ -12,8 +12,8 @@ describe('official 2.3.0 domain contracts', () => {
     expect(fields.some((f: { key: string }) => ['base_url', 'transport_host', 'transport_port'].includes(f.key))).toBe(false);
   });
   it('uses numeric triggerStatus rather than Quartz states', () => {
-    expect(jobStatus(1)).toEqual({ label: '运行中', tone: 'success' });
-    expect(jobStatus(0).label).toBe('已停止');
+    expect(jobStatus(1)).toEqual({ label: '调度已启用', tone: 'success' });
+    expect(jobStatus(0).label).toBe('调度已停止');
     expect(jobStatus(9).tone).toBe('neutral');
   });
   it('keeps all editable values but never posts stored glue source', () => {

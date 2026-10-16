@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { Workflow, ListTodo, Server, ScrollText, RefreshCw, Search, Plus, Pencil, Trash2, Play, Pause, FileText, ChevronLeft, ChevronRight, X, AlertTriangle, Check, Plug, ChartNoAxesCombined, Users, ArrowLeft, ExternalLink } from '@lucide/vue';
-import { invoke, type Context } from './bridge';
-import { type Job, type Group, type JobOption, type LogRow, type Info, type Page, type Form, type LogChunk, newJob, newGroup, jobForm, groupForm, jobStatus, schedules, timeLabel, triggerMillis, filterTime, advanceLog } from './domain';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { Workflow, ListTodo, Server, ScrollText, RefreshCw, Search, Plus, Pencil, Trash2, Play, Pause, FileText, ChevronLeft, ChevronRight, X, AlertTriangle, Check, Plug, ChartNoAxesCombined, Users, ArrowLeft, ExternalLink, Sparkles, Copy } from '@lucide/vue';
+import { invoke, type Context, type AiContext } from './bridge';
+import { type Job, type JobDetail, type Group, type JobOption, type LogRow, type Info, type Page, type Form, type LogChunk, newJob, newGroup, jobForm, groupForm, jobStatus, schedules, timeLabel, triggerMillis, filterTime, advanceLog } from './domain';
+import AutomationPanel from './AutomationPanel.vue';
+import JobDetailPanel from './JobDetailPanel.vue';
+import LoadingSkeleton from './LoadingSkeleton.vue';
+import { previewOperation, recommendations, logLookup, type Preview } from './automation';
 import JobEditor from './JobEditor.vue';
 import GroupEditor from './GroupEditor.vue';
 import ReportCharts, { type ReportData } from './ReportCharts.vue';
@@ -24,7 +28,7 @@ const reportTotals = computed(() => ({ running: report.value?.triggerDayCountRun
 const appearance = ref(0);
 const optionsBusy = ref(false), authExpired = ref(false);
 const loading = ref(false), working = ref(false), executionLoading = ref(false), error = ref(''), groupsError = ref('');
-const page = ref(1), pageSize = ref(50), total = ref(0);
+const page = ref(1), pageSize = ref(25), total = ref(0);
 const dateBefore = (days: number) => { const d = new Date(); d.setDate(d.getDate() - days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 type Period = 'today' | 'yesterday' | 'month' | 'lastMonth' | 'week' | 'last30' | 'custom';
 const period = ref<Period>('week');
@@ -47,7 +51,7 @@ const freshFilters = () => ({ jobGroup: -1, jobDesc: '', executorHandler: '', au
 const filters = ref(freshFilters());
 const filteredGroups = computed(() => groups.value.filter(g => `${g.appname} ${g.title} ${g.addressList}`.toLowerCase().includes(filters.value.groupSearch.toLowerCase())));
 const groupFilterOptions = computed(() => [...(info.value?.admin ? [{ value: -1, label: t('全部执行器') }] : []), ...groups.value.map(g => ({ value: g.id ?? 0, label: g.title }))]);
-const jobStatusOptions = computed(() => [{ value: -1, label: t('全部状态') }, { value: 1, label: t('运行中') }, { value: 0, label: t('已停止') }]);
+const jobStatusOptions = computed(() => [{ value: -1, label: t('全部状态') }, { value: 1, label: t('调度已启用') }, { value: 0, label: t('调度已停止') }]);
 const logStatusOptions = computed(() => [{ value: -1, label: t('全部状态') }, { value: 1, label: t('执行成功') }, { value: 2, label: t('执行失败') }, { value: 3, label: t('执行中') }]);
 const jobFilterOptions = computed(() => [{ value: '', label: t(optionsBusy.value ? '任务加载中' : '全部任务') }, ...taskOptions.value.map(job => ({ value: String(job.id), label: `#${job.id} · ${job.jobDesc}` }))]);
 const userRoleOptions = computed(() => [{ value: -1, label: t('全部角色') }, { value: 1, label: t('管理员') }, { value: 0, label: t('普通用户') }]);
@@ -55,15 +59,21 @@ const pageSizeOptions = computed(() => [10,25,50,100].map(size => ({ value: size
 const pagedGroups = computed(() => filteredGroups.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value));
 const displayTotal = computed(() => view.value === 'groups' ? filteredGroups.value.length : total.value);
 const label = computed(() => t(navigation.find(n => n.key === view.value)!.label));
-const canWrite = computed(() => !!info.value && !info.value.readOnly && !authExpired.value && !working.value && !loading.value);
+const canWrite = computed(() => !!info.value && !info.value.readOnly && !authExpired.value && !working.value && !loading.value && !executionLoading.value);
 const canManageGroups = computed(() => canWrite.value && info.value?.admin);
 const groupLabel = (id: number) => groups.value.find(g => g.id === id)?.title || `#${id}`;
 const scheduleLabel = (type: string) => t(schedules.find(([key]) => key === type)?.[1] || type);
-let epoch = 0, listRequest = 0, groupRequest = 0, logRequest = 0, optionRequest = 0;
+let epoch = 0, listRequest = 0, groupRequest = 0, logRequest = 0, optionRequest = 0, detailRequest = 0;
 let unsubscribe: (() => void) | undefined;
 let logTimer: ReturnType<typeof setTimeout> | undefined;
 const jobEditor = ref<Job>(), groupEditor = ref<Group>();
 const nodesJob = ref<Job>();
+const jobDetail = ref<JobDetail>(), detailTarget = ref<Job>(), detailBusy = ref(false), detailError = ref('');
+const automationOpen = ref(false), editorRevision = ref(''), groupRevision = ref('');
+const parameterMode = ref<'saved' | 'override'>('saved');
+const logSearch = ref('');
+const displayedLog = computed(() => !logSearch.value ? logState.value?.text || '' : (logState.value?.text || '').split('\n').filter(line => line.toLowerCase().includes(logSearch.value.toLowerCase())).join('\n'));
+
 const selectedRow = ref<{ view: View; id: number }>();
 const toast = ref<{ tone: 'success' | 'error'; title: string; detail: string; expanded: boolean }>();
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -77,8 +87,17 @@ function selectRow(target: View, id: number) { selectedRow.value = { view: targe
 function isSelected(target: View, id: number) { return selectedRow.value?.view === target && selectedRow.value.id === id; }
 const userEditor = ref<UserRow & { password: string }>();
 const jobEditorRef = ref<InstanceType<typeof JobEditor>>(), groupEditorRef = ref<InstanceType<typeof GroupEditor>>();
-type Confirmation = { method: string; title: string; target: string; form: Form; changes?: { key: string; before: string; after: string }[]; remove?: boolean; id?: number };
+type Confirmation = { method: string; title: string; target: string; form: Form; changes?: { key: string; before: string; after: string }[]; remove?: boolean; id?: number; preview?: Preview };
 const confirmation = ref<Confirmation>(), deletionId = ref(''), discard = ref(false), detail = ref<LogRow>();
+const unknownResult = ref<Confirmation>();
+async function reconcileUnknown() {
+  const pending = unknownResult.value; if (!pending) return;
+  jobEditor.value = undefined; groupEditor.value = undefined; userEditor.value = undefined;
+  if (pending.method === 'xxljob/trigger') { filters.value.jobGroup = Number(pending.form.jobGroup); filters.value.jobId = String(pending.form.id); await changeView('logs'); }
+  else if (pending.method.includes('Group')) await changeView('groups');
+  else await changeView('jobs');
+  await refresh();
+}
 const execution = ref<Job>(), executionParam = ref('');
 type LogState = { row: LogRow; text: string; next: number; end: boolean; busy: boolean; error: string; follow: boolean };
 const logState = ref<LogState>();
@@ -141,9 +160,9 @@ async function load() {
     if (current === epoch && token === listRequest) { error.value = message(e); jobs.value = []; logs.value = []; total.value = 0; }
   } finally { if (current === epoch && token === listRequest) loading.value = false; }
 }
-function clearOverlays() { jobEditor.value = undefined; groupEditor.value = undefined; nodesJob.value = undefined; userEditor.value = undefined; confirmation.value = undefined; execution.value = undefined; discard.value = false; detail.value = undefined; closeLog(); }
+function clearOverlays() { jobEditor.value = undefined; groupEditor.value = undefined; nodesJob.value = undefined; userEditor.value = undefined; confirmation.value = undefined; execution.value = undefined; discard.value = false; detail.value = undefined; jobDetail.value = undefined; detailTarget.value = undefined; detailBusy.value = false; editorRevision.value = ''; groupRevision.value = ''; closeLog(); }
 async function contextChanged(context: Context) {
-  const current = ++epoch; ++listRequest; ++groupRequest; ++optionRequest;
+  const current = ++epoch; ++listRequest; ++groupRequest; ++optionRequest; ++detailRequest; executionLoading.value = false; unknownResult.value = undefined;
   connectionId.value = context.connectionId || ''; info.value = undefined; groups.value = []; jobs.value = []; logs.value = []; users.value = []; report.value = undefined; reportOverview.value = { jobs: 0, triggers: 0, executors: 0 }; taskOptions.value = []; optionsBusy.value = false; authExpired.value = false; filters.value = freshFilters(); period.value = 'week'; view.value = 'report'; dismissToast(); selectedRow.value = undefined; error.value = ''; groupsError.value = ''; loading.value = false; working.value = false; total.value = 0; page.value = 1; clearOverlays(); standaloneLog.value = context.page === 'log';
   if (!connectionId.value) return;
   loading.value = true;
@@ -160,74 +179,85 @@ async function refresh() {
   catch (e) { if (current === epoch) error.value = message(e); }
 }
 function movePage(delta: number) { page.value += delta; if (view.value !== 'groups') void load(); }
-function editJob(job?: Job) { if (!canWrite.value) return; jobEditor.value = job ? { ...newJob(job.jobGroup), ...job } : newJob(groups.value[0]?.id || 0); void focusDialog(); }
-function copyJob(job: Job) { if (!canWrite.value) return; jobEditor.value = { ...newJob(job.jobGroup), ...job, id: undefined, triggerStatus: 0, jobDesc: `${job.jobDesc} (${t('副本')})` }; void focusDialog(); }
+async function freshJob(job: Job) { return invoke<JobDetail>(connectionId.value, 'xxljob/jobDetails', { form: { id: job.id, jobGroup: job.jobGroup } }); }
+async function editJob(job?: Job) {
+  if (!canWrite.value) return; const current = epoch; executionLoading.value = true;
+  try { const data = job ? await freshJob(job) : undefined; if (current !== epoch) return; editorRevision.value = data?.revision || ''; jobEditor.value = data ? { ...data.job } : newJob(groups.value[0]?.id || 0); void focusDialog(); }
+  catch (e) { if (current === epoch) showToast('error', t('无法读取任务配置'), message(e)); }
+  finally { if (current === epoch) executionLoading.value = false; }
+}
+async function copyJob(job: Job) { if (!canWrite.value) return; const current = epoch; executionLoading.value = true; try { const data = await freshJob(job); if (current !== epoch) return; editorRevision.value = ''; jobEditor.value = { ...data.job, id: undefined, triggerStatus: 0, jobDesc: `${data.job.jobDesc} (${t('副本')})` }; void focusDialog(); } catch (e) { if (current === epoch) showToast('error', t('无法读取任务配置'), message(e)); } finally { if (current === epoch) executionLoading.value = false; } }
 function registeredNodes(job: Job): string[] { return (groups.value.find(group => group.id === job.jobGroup)?.addressList || '').split(',').map(value => value.trim()).filter(Boolean); }
-function editGroup(group?: Group) { if (!canManageGroups.value) return; groupEditor.value = group ? { ...group } : newGroup(); void focusDialog(); }
+async function editGroup(group?: Group) { if (!canManageGroups.value) return; const current = epoch; try { const data = group ? await invoke<{ executor: Group; revision: string }>(connectionId.value, 'xxljob/executorDetails', { form: { id: group.id } }) : undefined; if (current !== epoch) return; groupRevision.value = data?.revision || ''; groupEditor.value = data ? { ...data.executor } : newGroup(); void focusDialog(); } catch (e) { if (current === epoch) showToast('error', t('读取失败'), message(e)); } }
 function editUser(user?: UserRow) { if (!canWrite.value || !info.value?.admin) return; error.value = ''; userEditor.value = { id: user?.id || 0, username: user?.username || '', role: user?.role ?? 0, permission: user?.permission || '', password: '' }; void focusDialog(); }
 function saveUser() { const u = userEditor.value; if (!u) return; if (u.username.length < 4 || u.username.length > 20 || (!u.id && u.password.length < 4) || (u.password && u.password.length > 20)) { error.value = t('用户名和新密码长度应为 4–20 位'); return; } confirmation.value = { method: 'xxljob/saveUser', title: u.id ? '确认编辑用户' : '确认新增用户', target: u.username, form: { id: u.id || '', username: u.username, password: u.password, role: u.role, permission: u.permission } }; void focusDialog(); }
 function removeUser(user: UserRow) { if (!canWrite.value || !info.value?.admin || user.username === info.value.username) return; deletionId.value = ''; confirmation.value = { method: 'xxljob/removeUser', title: '确认删除用户', target: user.username, form: { id: user.id }, id: user.id, remove: true }; void focusDialog(); }
 function closeEditor() { if (working.value) return; if (jobEditorRef.value?.isDirty || groupEditorRef.value?.isDirty) { discard.value = true; void focusDialog(); } else { jobEditor.value = undefined; groupEditor.value = undefined; } }
-function diff(before: Form, after: Form) { return Object.entries(after).filter(([key, value]) => before[key] !== value).map(([key, value]) => ({ key, before: String(before[key] ?? '-'), after: String(value === '' ? '（空）' : value) })); }
-function prepareSaveJob(job: Job) { const form = jobForm(job); confirmation.value = { method: 'xxljob/saveJob', title: job.id ? '确认更新任务' : '确认新增任务', target: `${job.jobDesc} · ${groupLabel(job.jobGroup)}`, form, changes: diff(job.id && jobEditor.value ? jobForm(jobEditor.value) : {}, form) }; void focusDialog(); }
-function prepareSaveGroup(group: Group) { const form = groupForm(group); confirmation.value = { method: 'xxljob/saveGroup', title: group.id ? '确认更新执行器' : '确认新增执行器', target: `${group.title} · ${group.appname}`, form, changes: diff(group.id && groupEditor.value ? groupForm(groupEditor.value) : {}, form) }; void focusDialog(); }
+async function prepareConfirmation(pending: Confirmation) {
+  if (!canWrite.value) return; const current = epoch; working.value = true; error.value = ''; deletionId.value = '';
+  try { const preview = await previewOperation(connectionId.value, pending.method, pending.form); if (current !== epoch) return; confirmation.value = { ...pending, target: preview.target, preview }; void focusDialog(); }
+  catch (e) { if (current === epoch) showToast('error', t('无法生成预览'), message(e)); }
+  finally { if (current === epoch) working.value = false; }
+}
+function prepareSaveJob(job: Job) { const fields = jobForm(job); const form: Form = job.id && jobEditor.value ? Object.fromEntries(Object.entries(fields).filter(([key, value]) => key === 'id' || key === 'jobGroup' || jobForm(jobEditor.value!)[key] !== value)) : fields; if (job.id) form.expectedRevision = editorRevision.value; void prepareConfirmation({ method: 'xxljob/saveJob', title: job.id ? '确认更新任务' : '确认新增任务', target: job.jobDesc, form }); }
+function prepareSaveGroup(group: Group) { const form = groupForm(group); if (group.id) form.expectedRevision = groupRevision.value; void prepareConfirmation({ method: 'xxljob/saveGroup', title: group.id ? '确认更新执行器' : '确认新增执行器', target: group.title, form }); }
 function prepareAction(method: 'start' | 'stop' | 'removeJob' | 'removeGroup', row: Job | Group) {
   if (!canWrite.value || !row.id) return;
   const titles = { start: '确认启动任务', stop: '确认停止调度', removeJob: '确认删除任务', removeGroup: '确认删除执行器' };
-  deletionId.value = ''; confirmation.value = { method: `xxljob/${method}`, title: titles[method], target: `${'jobDesc' in row ? row.jobDesc : row.title} · #${row.id}`, form: { id: row.id }, id: row.id, remove: method.startsWith('remove') }; void focusDialog();
+  void prepareConfirmation({ method: `xxljob/${method}`, title: titles[method], target: '', form: { id: row.id, ...('jobGroup' in row ? { jobGroup: row.jobGroup } : {}) }, id: row.id, remove: method.startsWith('remove') });
 }
 async function execute(job: Job) {
-  if (!canWrite.value || !job.id || executionLoading.value) return;
-  const current = epoch;
-  executionLoading.value = true;
-  try {
-    let start = 0;
-    while (true) {
-      const result = await invoke<Page<Job>>(connectionId.value, 'xxljob/jobs', { form: { start, length: 100, jobGroup: job.jobGroup, triggerStatus: -1 } });
-      if (current !== epoch) return;
-      const configured = result.data.find(row => row.id === job.id && row.jobGroup === job.jobGroup);
-      if (configured) {
-        if (typeof configured.executorParam !== 'string') throw new Error(t('任务配置缺少执行参数，请刷新后重试'));
-        execution.value = configured;
-        executionParam.value = configured.executorParam;
-        await focusDialog();
-        return;
-      }
-      start += result.data.length;
-      if (!result.data.length || start >= result.recordsFiltered) throw new Error(t('任务已变更，请刷新后重试'));
-    }
-  } catch (e) { if (current === epoch) showToast('error', t('无法读取任务配置'), message(e)); }
-  finally { executionLoading.value = false; }
+  if (!canWrite.value || !job.id || executionLoading.value) return; const current = epoch; executionLoading.value = true;
+  try { const data = await freshJob(job); if (current !== epoch) return; execution.value = data.job; executionParam.value = data.job.executorParam || ''; parameterMode.value = 'saved'; void focusDialog(); }
+  catch (e) { if (current === epoch) showToast('error', t('无法读取任务配置'), message(e)); }
+  finally { if (current === epoch) executionLoading.value = false; }
 }
-function prepareExecution() { if (!execution.value?.id) return; confirmation.value = { method: 'xxljob/trigger', title: '确认执行一次', target: `${execution.value.jobDesc} · #${execution.value.id}`, form: { id: execution.value.id, executorParam: executionParam.value }, changes: [{ key: 'executorParam', before: execution.value.executorParam || '（空）', after: executionParam.value || '（空）' }] }; execution.value = undefined; void focusDialog(); }
+async function prepareExecution() {
+  const job = execution.value; if (!job?.id) return;
+  await prepareConfirmation({ method: 'xxljob/trigger', title: '确认执行一次', target: job.jobDesc, form: { id: job.id, jobGroup: job.jobGroup, parameterMode: parameterMode.value, ...(parameterMode.value === 'override' ? { executorParam: executionParam.value } : {}) } });
+  if (confirmation.value) execution.value = undefined;
+}
 async function commit() {
   if (!confirmation.value || !canWrite.value || (confirmation.value.remove && deletionId.value !== String(confirmation.value.id))) return;
-  const pending = confirmation.value, current = epoch;
-  working.value = true; error.value = ''; dismissToast();
+  const pending = confirmation.value, current = epoch; working.value = true; error.value = ''; dismissToast();
   try {
-    await invoke(connectionId.value, pending.method, { form: { ...pending.form }, confirmed: true });
+    await invoke(connectionId.value, pending.method, { form: { ...pending.form }, confirmed: true, previewToken: pending.preview?.previewToken });
     if (current !== epoch) return;
-    showToast('success', t(pending.method === 'xxljob/trigger' ? '执行请求已提交，请在调度日志中确认执行结果。' : '操作成功。'));
+    showToast('success', t(pending.method === 'xxljob/trigger' ? 'Admin 已接收请求，请在调度日志确认执行结果。' : '操作成功。'));
     confirmation.value = undefined; jobEditor.value = undefined; groupEditor.value = undefined; userEditor.value = undefined;
+    if (pending.method === 'xxljob/trigger') { view.value = 'logs'; page.value = 1; filters.value.jobGroup = Number(pending.form.jobGroup); await loadTaskOptions(); filters.value.jobId = String(pending.form.id); }
     await Promise.all([loadGroups(), load()]);
-  } catch (e) { if (current === epoch) { showToast('error', t('操作未完成，请查看接口错误'), message(e)); error.value = ''; confirmation.value = undefined; } }
+  } catch (e) { if (current === epoch) { const detail = message(e); if (detail.includes('结果未知')) { unknownResult.value = pending; jobEditor.value = undefined; groupEditor.value = undefined; userEditor.value = undefined; } showToast('error', t('操作未完成，请查看接口错误'), detail); error.value = ''; confirmation.value = undefined; } }
   finally { if (current === epoch) working.value = false; }
 }
+async function showJobDetail(job: Job) {
+  const current = epoch, token = ++detailRequest; detailTarget.value = job; jobDetail.value = undefined; detailError.value = ''; detailBusy.value = true;
+  try { const data = await freshJob(job); if (current === epoch && token === detailRequest && detailTarget.value?.id === job.id) jobDetail.value = data; }
+  catch (e) { if (current === epoch && token === detailRequest) detailError.value = message(e); }
+  finally { if (current === epoch && token === detailRequest) detailBusy.value = false; }
+}
+function closeJobDetail() { ++detailRequest; detailTarget.value = undefined; jobDetail.value = undefined; detailBusy.value = false; }
+function resetFilters() { const group = info.value?.admin ? -1 : groups.value[0]?.id || 0; filters.value = { ...freshFilters(), jobGroup: group }; page.value = 1; void changeGroup(); }
+async function copyLoadedLog() { try { await navigator.clipboard.writeText(displayedLog.value); showToast('success', t('已复制')); } catch (e) { showToast('error', t('复制失败'), message(e)); } }
+const aiContext = computed<AiContext>(() => {
+  const context: AiContext = { connectionId: connectionId.value, page: view.value };
+  if (logState.value) context.resource = { kind: 'log', id: logState.value.row.id, jobId: logState.value.row.jobId, executorId: logState.value.row.jobGroup, triggerTime: logState.value.row.triggerTime };
+  else if (detailTarget.value?.id) context.resource = { kind: 'job', id: detailTarget.value.id, executorId: detailTarget.value.jobGroup };
+  else if (selectedRow.value?.view === 'jobs') { const job = jobs.value.find(job => job.id === selectedRow.value?.id); if (job?.id) context.resource = { kind: 'job', id: job.id, executorId: job.jobGroup }; }
+  else if (selectedRow.value?.view === 'groups') context.resource = { kind: 'executor', id: selectedRow.value.id };
+  return context;
+});
+watch([aiContext, locale], () => { if (connectionId.value) void window.dbxPlugin?.ai?.setRecommendations(recommendations(aiContext.value)).catch(() => {}); });
+async function openAi() { const ai = window.dbxPlugin?.ai; if (!ai) { showToast('error', t('请使用支持 AI 的 DBX 版本')); return; } const update = recommendations(aiContext.value); try { await ai.openConversation({ title: update.items[0].label, prompt: update.items[0].prompt, context: update.context, send: false, mode: 'agent' }); } catch (e) { showToast('error', 'AI', message(e)); } }
 function closeLog() { ++logRequest; if (logTimer) clearTimeout(logTimer); logTimer = undefined; logState.value = undefined; }
-function openLog(row: LogRow) { closeLog(); logState.value = { row, text: '', next: 1, end: false, busy: false, error: '', follow: true }; void readLog(); }
+function openLog(row: LogRow) { closeLog(); closeJobDetail(); logSearch.value = '';  logState.value = { row, text: '', next: 1, end: false, busy: false, error: '', follow: true }; void readLog(); }
 function backFromLog() { closeLog(); standaloneLog.value = false; if (view.value === 'report') void changeView('logs'); }
 async function queryLogRow(value: Record<string, unknown>, current: number): Promise<LogRow | undefined> {
   const { id, jobId, jobGroup } = value;
   if (![id, jobId, jobGroup].every(item => typeof item === 'number' && Number.isSafeInteger(item) && item > 0)) throw new Error(t('日志标识无效'));
-  let start = 0;
-  while (true) {
-    const result = await invoke<Page<LogRow>>(connectionId.value, 'xxljob/logs', { form: { start, length: 100, jobGroup, jobId, logStatus: -1 } });
-    if (current !== epoch) return;
-    const row = result.data.find(item => item.id === id && item.jobId === jobId && item.jobGroup === jobGroup);
-    if (row) return row;
-    start += result.data.length;
-    if (!result.data.length || start >= result.recordsFiltered) throw new Error(t('日志已变更，请刷新后重试'));
-  }
+  const form = value.triggerTime ? logLookup(value as unknown as LogRow) : { logId: id, jobId, jobGroup };
+  const row = await invoke<LogRow>(connectionId.value, 'xxljob/resolveLog', { form });
+  if (current === epoch) return row;
 }
 async function restoreStandaloneLog(value: Record<string, unknown>, current: number) {
   const row = await queryLogRow(value, current);
@@ -236,7 +266,7 @@ async function restoreStandaloneLog(value: Record<string, unknown>, current: num
 async function newLogTab() {
   const row = logState.value?.row;
   if (!row || !window.dbxPlugin?.openWorkbench) return;
-  try { await window.dbxPlugin.openWorkbench('io.dbx.xxljob-console.log', { connectionId: connectionId.value, page: 'log', tabTitle: `#${row.id} ${t('日志查看')}`, log: { id: row.id, jobId: row.jobId, jobGroup: row.jobGroup } }, { forceNew: true }); }
+  try { await window.dbxPlugin.openWorkbench('io.dbx.xxljob-console.log', { connectionId: connectionId.value, page: 'log', tabTitle: `#${row.id} ${t('日志查看')}`, log: { id: row.id, jobId: row.jobId, jobGroup: row.jobGroup, triggerTime: row.triggerTime } }, { forceNew: true }); }
   catch (e) { showToast('error', t('新窗口打开失败'), message(e)); }
 }
 function scheduleLog() { if (logTimer) clearTimeout(logTimer); logTimer = undefined; if (logState.value?.follow && !logState.value.end && !logState.value.error) logTimer = setTimeout(() => void readLog(), 3000); }
@@ -245,29 +275,20 @@ async function readLog() {
   if (logTimer) clearTimeout(logTimer); logTimer = undefined;
   const token = ++logRequest, current = epoch; state.busy = true; state.error = '';
   try {
-    const form = info.value?.adminVersion === '3.4'
-      ? { logId: state.row.id, fromLineNum: state.next }
-      : { executorAddress: state.row.executorAddress, triggerTime: triggerMillis(state.row.triggerTime), logId: state.row.id, fromLineNum: state.next };
-    let chunk: LogChunk;
-    try { chunk = await invoke<LogChunk>(connectionId.value, 'xxljob/logContent', { form }); }
-    catch (cause) {
-      if (!String(cause).includes('请先查询调度日志')) throw cause;
-      const refreshed = await queryLogRow(state.row, current);
-      if (!refreshed || current !== epoch || token !== logRequest || logState.value !== state) return;
-      state.row = refreshed;
-      chunk = await invoke<LogChunk>(connectionId.value, 'xxljob/logContent', { form });
-    }
+    const chunk = await invoke<LogChunk>(connectionId.value, 'xxljob/logSnapshot', { form: { ...logLookup(state.row), fromLineNum: state.next, limit: 1000 } });
     if (current !== epoch || token !== logRequest || logState.value !== state) return;
     const next = advanceLog(state.next, chunk);
     if (state.text.length + next.text.length > 8 * 1024 * 1024) throw new Error('日志显示达到 8 MiB 上限，请在执行器侧查看后续内容');
     state.text += next.text; state.next = next.next; state.end = next.end;
+    if (chunk.partialLine) { state.text += '\n[' + t('单行日志超过 128 KiB，超出部分已截断。') + ']\n'; }
     if (state.follow && next.text) { await nextTick(); if (logState.value === state && logContentRef.value) logContentRef.value.scrollTop = logContentRef.value.scrollHeight; }
   } catch (e) { if (current === epoch && token === logRequest && logState.value === state) { state.error = message(e); state.follow = false; } }
   finally { if (current === epoch && token === logRequest && logState.value === state) { state.busy = false; scheduleLog(); } }
 }
 function keyboard(event: KeyboardEvent) {
   const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"]'); const top = dialogs[dialogs.length - 1]; if (!top) return;
-  if (event.key === 'Escape' && !working.value) { event.preventDefault(); if (confirmation.value) confirmation.value = undefined; else if (discard.value) discard.value = false; else if (execution.value) execution.value = undefined; else if (detail.value) detail.value = undefined; else if (userEditor.value) userEditor.value = undefined; else closeEditor(); }
+  if (event.defaultPrevented || automationOpen.value) return;
+  if (event.key === 'Escape' && !working.value) { event.preventDefault(); if (confirmation.value) confirmation.value = undefined; else if (discard.value) discard.value = false; else if (execution.value) execution.value = undefined; else if (detailTarget.value) closeJobDetail(); else if (detail.value) detail.value = undefined; else if (userEditor.value) userEditor.value = undefined; else closeEditor(); }
   if (event.key === 'Tab') { const elements = [...top.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]')]; const first = elements[0], last = elements[elements.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
 }
 onMounted(async () => {
@@ -278,16 +299,17 @@ onMounted(async () => {
   catch (e) { error.value = message(e); }
 });
 function onEnvironment(event: Event) { const detail = (event as CustomEvent<{ locale?: string }>).detail; if (detail?.locale) setLocale(detail.locale); appearance.value++; }
-onBeforeUnmount(() => { ++epoch; unsubscribe?.(); closeLog(); dismissToast(); document.removeEventListener('keydown', keyboard); document.removeEventListener('dbx-plugin-env', onEnvironment); });
+onBeforeUnmount(() => { void window.dbxPlugin?.ai?.clearRecommendations().catch(() => {}); ++epoch; unsubscribe?.(); closeLog(); dismissToast(); document.removeEventListener('keydown', keyboard); document.removeEventListener('dbx-plugin-env', onEnvironment); });
 </script>
 
 <template>
-  <div class="shell">
-    <header class="workbench-nav"><nav :aria-label="t('主导航')"><button v-for="item in visibleNavigation" :key="item.key" :class="{ active: view === item.key && !logState }" :disabled="working || !!jobEditor || !!groupEditor || !!userEditor || optionsBusy" :title="t(item.label)" @click="changeView(item.key)"><component :is="item.icon" :size="15" /><span>{{ t(item.label) }}</span></button></nav><div v-if="info" class="account-meta"><span><strong>{{ info.username }}</strong> · {{ info.admin ? t('管理员') : t('普通用户') }}<span v-if="info.readOnly"> · {{ t('只读') }}</span></span><code :title="info.baseUrl">{{ info.baseUrl }}</code></div></header>
-    <main :inert="!!jobEditor || !!groupEditor || !!userEditor || !!confirmation || !!discard || !!execution || !!detail">
-      <section v-if="logState" class="log-page"><header><button class="back-button" @click="backFromLog"><ArrowLeft :size="17" />{{ t('返回') }}</button><div><h1>{{ t('执行日志') }} #{{ logState.row.id }}</h1><span class="muted">{{ t('任务') }} #{{ logState.row.jobId }} · {{ timeLabel(logState.row.triggerTime) }}</span></div><div class="spacer" /><button :disabled="!canOpenTab" @click="newLogTab"><ExternalLink :size="15" />{{ t('新窗口查看') }}</button></header><div class="log-meta"><code>{{ logState.row.executorAddress }}</code><span class="badge" :class="logState.end ? 'success' : 'warning'">{{ t(logState.end ? '已结束' : '运行中 · 每 3 秒更新') }}</span></div><p v-if="error || logState.error" class="banner error" role="alert">{{ displayMessage(error || logState.error) }}</p><pre ref="logContentRef" class="log-content" tabindex="0">{{ logState.text || t(logState.busy ? '读取中' : '暂无日志内容') }}</pre><footer><span class="muted">{{ t('下一行') }} {{ logState.next }}</span><div class="spacer" /><label class="inline"><input v-model="logState.follow" type="checkbox" :disabled="logState.end" @change="scheduleLog" />{{ t('自动跟随') }}</label><button :disabled="logState.busy || logState.end" @click="readLog"><RefreshCw :size="15" />{{ t('读取后续') }}</button></footer></section>
+  <div class="shell" :inert="automationOpen">
+    <header class="workbench-nav"><nav :aria-label="t('主导航')"><button v-for="item in visibleNavigation" :key="item.key" :class="{ active: view === item.key && !logState }" :disabled="working || !!jobEditor || !!groupEditor || !!userEditor || optionsBusy" :title="t(item.label)" @click="changeView(item.key)"><component :is="item.icon" :size="15" /><span>{{ t(item.label) }}</span></button></nav><button v-if="info" class="ai-entry" @click="openAi"><Sparkles :size="15" />{{ t('AI 分析') }}</button><AutomationPanel v-if="info" :connection-id="connectionId" :name="info.name" :read-only="info.readOnly" :production="!!info.isProduction" :admin="info.admin" @opened="automationOpen = $event" /><div v-if="info" class="account-meta"><span><strong>{{ info.username }}</strong> · {{ info.admin ? t('管理员') : t('普通用户') }}<span v-if="info.readOnly"> · {{ t('只读') }}</span></span><code :title="info.baseUrl">{{ info.baseUrl }}</code></div></header>
+    <main :inert="!!jobEditor || !!groupEditor || !!userEditor || !!confirmation || !!discard || !!execution || !!detail || !!detailTarget">
+      <div v-if="unknownResult" class="banner warning" role="alert"><AlertTriangle :size="18" /><span>{{ t('上次写入结果未知，请核对服务端状态后再操作。') }}</span><button @click="reconcileUnknown">{{ t('核对当前状态') }}</button><button class="icon" :aria-label="t('关闭')" @click="unknownResult = undefined"><X :size="16" /></button></div>
+      <section v-if="logState" class="log-page"><header><button class="back-button" @click="backFromLog"><ArrowLeft :size="17" />{{ t('返回') }}</button><div><h1>{{ t('执行日志') }} #{{ logState.row.id }}</h1><span class="muted">{{ t('任务') }} #{{ logState.row.jobId }} · {{ timeLabel(logState.row.triggerTime) }}</span></div><div class="spacer" /><button :disabled="!canOpenTab" @click="newLogTab"><ExternalLink :size="15" />{{ t('新窗口查看') }}</button></header><div class="log-meta"><code>{{ logState.row.executorAddress }}</code><span class="badge" :class="logState.end ? 'success' : 'warning'">{{ t(logState.end ? '日志读取完成' : '等待日志 · 每 3 秒更新') }}</span></div><p v-if="error || logState.error" class="banner error" role="alert">{{ displayMessage(error || logState.error) }}</p><div class="log-tools"><input v-model="logSearch" type="search" :placeholder="t('搜索已加载日志')" :aria-label="t('搜索已加载日志')" /><button @click="copyLoadedLog"><Copy :size="15" />{{ t('复制') }}</button><button @click="openAi"><Sparkles :size="15" />{{ t('AI 分析') }}</button></div><pre ref="logContentRef" class="log-content" tabindex="0">{{ displayedLog || t(logState.busy ? '读取中' : '暂无日志内容') }}</pre><footer><span class="muted">{{ t('下一行') }} {{ logState.next }}</span><div class="spacer" /><label class="inline"><input v-model="logState.follow" type="checkbox" :disabled="logState.end" @change="scheduleLog" />{{ t('自动跟随') }}</label><button :disabled="logState.busy || logState.end" @click="readLog"><RefreshCw :size="15" />{{ t('读取后续') }}</button></footer></section>
       <template v-else>
-      <div v-if="error" class="banner error" role="alert"><AlertTriangle :size="17" /><span>{{ displayMessage(error) }}</span></div>
+      <div v-if="error" class="banner error" role="alert"><AlertTriangle :size="17" /><span>{{ displayMessage(error) }}</span><button v-if="!authExpired" :disabled="loading" @click="refresh">{{ t('重试') }}</button></div>
       <div v-if="groupsError" class="banner warning" role="alert"><AlertTriangle :size="17" /><span>{{ t('执行器列表') }}：{{ displayMessage(groupsError) }}</span><button :disabled="loading || working" @click="loadGroups">{{ t('重试') }}</button></div>
       <section v-if="!info" class="empty-state"><Plug :size="38" /><h2>{{ t(loading ? '正在连接' : '未连接调度中心') }}</h2><p v-if="!loading">{{ t('请从 DBX 的 XXL-JOB 连接打开工作台。') }}</p><button v-if="connectionId && !loading" @click="contextChanged({ connectionId })"><RefreshCw :size="16" />{{ t('重试') }}</button></section>
       <template v-else>
@@ -299,14 +321,14 @@ onBeforeUnmount(() => { ++epoch; unsubscribe?.(); closeLog(); dismissToast(); do
           <template v-if="view === 'logs'"><UiSelect v-model="filters.jobId" :options="jobFilterOptions" :aria-label="t('筛选具体任务')" :disabled="loading || working || optionsBusy || filters.jobGroup < 1 || authExpired" @change="search" /><UiSelect v-model="filters.logStatus" :options="logStatusOptions" :aria-label="t('日志状态')" :disabled="loading || working || optionsBusy || authExpired" @change="search" /></template>
           <template v-if="view === 'logs'"><label class="date-filter"><span>{{ t('请选择开始时间') }}</span><input v-model="filters.from" type="datetime-local" :aria-label="t('请选择开始时间')" /></label><label class="date-filter"><span>{{ t('请选择结束时间') }}</span><input v-model="filters.to" type="datetime-local" :aria-label="t('请选择结束时间')" /></label></template>
           <template v-if="view === 'users'"><input v-model="filters.username" :aria-label="t('用户名筛选')" :placeholder="t('用户名')" /><UiSelect v-model="filters.userRole" :options="userRoleOptions" :aria-label="t('角色筛选')" /></template>
-          <button v-if="view !== 'report' || period === 'custom'" type="button" :disabled="loading || working || optionsBusy || authExpired" @click="search"><Search :size="16" />{{ t('查询') }}</button><div class="spacer" /><button v-if="view === 'jobs'" type="button" class="primary" :disabled="!canWrite || !groups.length || !!groupsError" @click="editJob()"><Plus :size="16" />{{ t('新增任务') }}</button><button v-if="view === 'groups'" type="button" class="primary" :disabled="!canManageGroups" @click="editGroup()"><Plus :size="16" />{{ t('新增执行器') }}</button><button v-if="view === 'users'" type="button" class="primary" :disabled="!canWrite" @click="editUser()"><Plus :size="16" />{{ t('新增用户') }}</button>
+          <button v-if="view !== 'report' || period === 'custom'" type="button" :disabled="loading || working || optionsBusy || authExpired" @click="search"><Search :size="16" />{{ t('查询') }}</button><button v-if="view !== 'report'" :disabled="loading || working" @click="resetFilters">{{ t('清空筛选') }}</button><div class="spacer" /><button v-if="view === 'jobs'" type="button" class="primary" :disabled="!canWrite || !groups.length || !!groupsError" @click="editJob()"><Plus :size="16" />{{ t('新增任务') }}</button><button v-if="view === 'groups'" type="button" class="primary" :disabled="!canManageGroups" @click="editGroup()"><Plus :size="16" />{{ t('新增执行器') }}</button><button v-if="view === 'users'" type="button" class="primary" :disabled="!canWrite" @click="editUser()"><Plus :size="16" />{{ t('新增用户') }}</button>
         </div>
-        <section v-if="view === 'report'" class="report"><div class="report-cards"><article><span>{{ t('任务数量') }}</span><strong>{{ reportOverview.jobs.toLocaleString(locale) }}</strong><small>{{ t('已配置任务') }}</small><div class="card-icon"><ListTodo :size="21" /></div></article><article><span>{{ t('调度次数') }}</span><strong>{{ reportOverview.triggers.toLocaleString(locale) }}</strong><small>{{ t('累计调度') }}</small><div class="card-icon"><ChartNoAxesCombined :size="21" /></div></article><article><span>{{ t('执行器数量') }}</span><strong>{{ reportOverview.executors.toLocaleString(locale) }}</strong><small>{{ t('执行器分组') }}</small><div class="card-icon"><Server :size="21" /></div></article></div><div class="report-highlights"><span>{{ t('所选时段') }} · {{ filters.reportStart }} — {{ filters.reportEnd }}</span><span>{{ t('成功') }} <strong>{{ reportTotals.success }}</strong></span><span>{{ t('失败') }} <strong>{{ reportTotals.failure }}</strong></span><span>{{ t('运行中') }} <strong>{{ reportTotals.running }}</strong></span></div><ReportCharts :report="report" :appearance="appearance" /><p v-if="!loading && !report?.triggerDayList?.length" class="report-empty muted">{{ t('所选时间段暂无报表数据') }}</p></section>
-        <div v-if="view !== 'report'" class="table-wrap" :aria-busy="loading">
+        <LoadingSkeleton v-if="loading" /><section v-if="view === 'report' && !loading" class="report"><div class="report-cards"><article><span>{{ t('任务数量') }}</span><strong>{{ reportOverview.jobs.toLocaleString(locale) }}</strong><small>{{ t('已配置任务') }}</small><div class="card-icon"><ListTodo :size="21" /></div></article><article><span>{{ t('调度次数') }}</span><strong>{{ reportOverview.triggers.toLocaleString(locale) }}</strong><small>{{ t('累计调度') }}</small><div class="card-icon"><ChartNoAxesCombined :size="21" /></div></article><article><span>{{ t('执行器数量') }}</span><strong>{{ reportOverview.executors.toLocaleString(locale) }}</strong><small>{{ t('执行器分组') }}</small><div class="card-icon"><Server :size="21" /></div></article></div><div class="report-highlights"><span>{{ t('所选时段') }} · {{ filters.reportStart }} — {{ filters.reportEnd }}</span><span>{{ t('成功') }} <strong>{{ reportTotals.success }}</strong></span><span>{{ t('失败') }} <strong>{{ reportTotals.failure }}</strong></span><span>{{ t('运行中') }} <strong>{{ reportTotals.running }}</strong></span></div><ReportCharts :report="report" :appearance="appearance" /><p v-if="!loading && !report?.triggerDayList?.length" class="report-empty muted">{{ t('所选时间段暂无报表数据') }}</p></section>
+        <div v-if="view !== 'report' && !loading" class="table-wrap" :aria-busy="loading">
           <table v-if="view === 'jobs'" class="jobs-table">
             <thead><tr><th>ID</th><th>{{ t('任务描述') }}</th><th>{{ t('执行器') }}</th><th>Handler</th><th>{{ t('调度类型') }}</th><th>{{ t('调度配置') }}</th><th>{{ t('负责人') }}</th><th>{{ t('状态') }}</th><th class="actions">{{ t('操作') }}</th></tr></thead>
             <tbody><tr v-for="job in jobs" :key="job.id" tabindex="0" :aria-selected="isSelected('jobs', job.id ?? -1)" :class="{ 'selected-row': isSelected('jobs', job.id ?? -1) }" @click="selectRow('jobs', job.id ?? -1)" @keydown.enter="selectRow('jobs', job.id ?? -1)">
-              <td class="mono">#{{ job.id }}</td><td>{{ job.jobDesc }}</td><td>{{ groupLabel(job.jobGroup) }}</td><td><code>{{ job.executorHandler || job.glueType }}</code></td><td>{{ scheduleLabel(job.scheduleType) }}</td><td><code>{{ job.scheduleType === 'NONE' ? '-' : job.scheduleConf }}{{ job.scheduleType === 'FIX_RATE' ? ` ${t('秒')}` : '' }}</code></td>
+              <td class="mono">#{{ job.id }}</td><td><button class="resource-link" @click.stop="showJobDetail(job)">{{ job.jobDesc }}</button></td><td>{{ groupLabel(job.jobGroup) }}</td><td><code>{{ job.executorHandler || job.glueType }}</code></td><td>{{ scheduleLabel(job.scheduleType) }}</td><td><code>{{ job.scheduleType === 'NONE' ? '-' : job.scheduleConf }}{{ job.scheduleType === 'FIX_RATE' ? ` ${t('秒')}` : '' }}</code></td>
               <td>{{ job.author }}</td><td><span class="badge" :class="jobStatus(job.triggerStatus).tone">{{ t(jobStatus(job.triggerStatus).label) }}</span></td>
               <td class="actions">
                 <div class="row-actions"><button class="row-action action-run" :disabled="!canWrite || executionLoading" @click="execute(job)"><Play :size="14" />{{ t('执行一次') }}</button>
@@ -326,11 +348,12 @@ onBeforeUnmount(() => { ++epoch; unsubscribe?.(); closeLog(); dismissToast(); do
       </template>
       </template>
     </main>
+    <JobDetailPanel v-if="detailTarget" :detail="jobDetail" :busy="detailBusy" :error="detailError" @close="closeJobDetail" @refresh="showJobDetail(detailTarget!)" @ai="openAi" @log="openLog" />
     <div v-if="jobEditor || groupEditor" class="overlay" :inert="!!confirmation || discard"><JobEditor v-if="jobEditor" ref="jobEditorRef" :job="jobEditor" :groups="groups" :connection-id="connectionId" :busy="working" :suspended="discard || !!confirmation" :server-error="displayMessage(error)" @save="prepareSaveJob" @close="closeEditor" /><GroupEditor v-if="groupEditor" ref="groupEditorRef" :group="groupEditor" :busy="working" :server-error="displayMessage(error)" @save="prepareSaveGroup" @close="closeEditor" /></div>
     <div v-if="nodesJob" class="overlay"><section class="modal compact" role="dialog" aria-modal="true" :aria-label="t('注册节点')"><header><h2>{{ t('注册节点') }} · #{{ nodesJob.id }}</h2><button class="icon" :aria-label="t('关闭')" @click="nodesJob = undefined"><X :size="17" /></button></header><div class="modal-body"><p class="target">{{ nodesJob.jobDesc }}</p><ul v-if="registeredNodes(nodesJob).length" class="registered-nodes"><li v-for="address in registeredNodes(nodesJob)" :key="address"><code>{{ address }}</code></li></ul><p v-else class="muted">{{ t('暂无注册节点') }}</p></div><footer><button @click="nodesJob = undefined">{{ t('关闭') }}</button></footer></section></div>
-    <div v-if="confirmation" class="overlay modal-layer"><section class="modal" role="dialog" aria-modal="true" :aria-label="t('确认操作')"><header><div><small>{{ info?.environment || t('未标记环境') }} · {{ info?.name }}</small><h2>{{ t(confirmation.title) }}</h2></div><button class="icon" :aria-label="t('取消确认')" :title="t('取消')" :disabled="working" @click="confirmation = undefined"><X :size="18" /></button></header><div class="modal-body"><p class="target">{{ confirmation.target }}</p><code class="endpoint">{{ info?.baseUrl }}</code><p v-if="confirmation.remove" class="banner warning"><AlertTriangle :size="17" />{{ t('删除后无法撤销。') }}</p><p v-if="confirmation.method === 'xxljob/trigger'" class="banner warning"><AlertTriangle :size="17" />{{ t('本次参数将覆盖保存的参数，空白表示传入空字符串。') }}</p><p v-if="confirmation.method === 'xxljob/stop'" class="banner warning"><AlertTriangle :size="17" />{{ t('只停止后续调度，不终止已经运行的任务。') }}</p><div v-if="confirmation.changes?.length" class="changes"><div v-for="change in confirmation.changes" :key="change.key"><code>{{ change.key }}</code><pre class="before">{{ change.before }}</pre><pre>{{ change.after }}</pre></div></div><label v-if="confirmation.remove">{{ t('输入 ID') }} {{ confirmation.id }}<input v-model="deletionId" autocomplete="off" inputmode="numeric" :aria-label="t('删除确认 ID')" /></label></div><footer><button :disabled="working" @click="confirmation = undefined">{{ t('取消') }}</button><button :class="confirmation.remove ? 'danger' : 'primary'" :disabled="working || (confirmation.remove && deletionId !== String(confirmation.id))" @click="commit"><Check :size="16" />{{ t(working ? '提交中' : '确认') }}</button></footer></section></div>
+    <div v-if="confirmation" class="overlay modal-layer"><section class="modal" role="dialog" aria-modal="true" :aria-label="t('确认操作')"><header><div><small>{{ confirmation.preview?.isProduction ? t('生产环境') + ' · ' : '' }}{{ info?.environment || t('未标记环境') }} · {{ info?.name }}</small><h2>{{ t(confirmation.title) }}</h2></div><button class="icon" :aria-label="t('取消确认')" :title="t('取消')" :disabled="working" @click="confirmation = undefined"><X :size="18" /></button></header><div class="modal-body"><p class="target">{{ confirmation.target }}</p><code class="endpoint">{{ info?.baseUrl }}</code><p v-if="confirmation.remove" class="banner warning"><AlertTriangle :size="17" />{{ t('删除后无法撤销。') }}</p><p v-if="confirmation.method === 'xxljob/trigger' && confirmation.form.parameterMode === 'override'" class="banner warning"><AlertTriangle :size="17" />{{ t('本次参数将覆盖保存的参数，空白表示传入空字符串。') }}</p><p v-if="confirmation.method === 'xxljob/stop'" class="banner warning"><AlertTriangle :size="17" />{{ t('只停止后续调度，不终止已经运行的任务。') }}</p><p v-for="warning in confirmation.preview?.warnings || []" :key="warning" class="banner warning">{{ warning }}</p><small v-if="confirmation.preview" class="muted">{{ t('预览有效期至') }} {{ new Date(confirmation.preview.expiresAt).toLocaleTimeString() }}</small><div v-if="confirmation.preview?.changes.length" class="changes"><div v-for="change in confirmation.preview.changes" :key="change.key"><code>{{ change.key }}</code><pre class="before">{{ change.before ?? '—' }}</pre><pre>{{ change.after ?? '—' }}</pre></div></div><div v-if="confirmation.changes?.length" class="changes"><div v-for="change in confirmation.changes" :key="change.key"><code>{{ change.key }}</code><pre class="before">{{ change.before }}</pre><pre>{{ change.after }}</pre></div></div><label v-if="confirmation.remove">{{ t('输入 ID') }} {{ confirmation.id }}<input v-model="deletionId" autocomplete="off" inputmode="numeric" :aria-label="t('删除确认 ID')" /></label></div><footer><button :disabled="working" @click="confirmation = undefined">{{ t('取消') }}</button><button :class="confirmation.remove ? 'danger' : 'primary'" :disabled="working || (confirmation.remove && deletionId !== String(confirmation.id))" @click="commit"><Check :size="16" />{{ t(working ? '提交中' : '确认') }}</button></footer></section></div>
     <div v-if="discard" class="overlay modal-layer"><section class="modal compact" role="dialog" aria-modal="true" :aria-label="t('未保存的修改')"><header><h2>{{ t('未保存的修改') }}</h2></header><div class="modal-body">{{ t('关闭将丢弃当前修改。') }}</div><footer><button @click="discard = false">{{ t('继续编辑') }}</button><button class="danger" @click="jobEditor = undefined; groupEditor = undefined; discard = false">{{ t('放弃修改') }}</button></footer></section></div>
-    <div v-if="execution" class="overlay"><section class="modal" role="dialog" aria-modal="true" :aria-label="t('执行一次')"><header><div><small>{{ t('任务') }} #{{ execution.id }}</small><h2>{{ t('执行一次') }}</h2></div><button class="icon" :aria-label="t('取消执行')" :title="t('取消')" @click="execution = undefined"><X :size="18" /></button></header><div class="modal-form"><div class="modal-body"><p class="target">{{ execution.jobDesc }}</p><label>{{ t('本次执行参数') }}<textarea v-model="executionParam" rows="6" :aria-label="t('本次执行参数')" spellcheck="false" /></label></div><footer><button type="button" @click="execution = undefined">{{ t('取消') }}</button><button type="button" class="primary" @click="prepareExecution"><Play :size="16" />{{ t('执行一次') }}</button></footer></div></section></div>
+    <div v-if="execution" class="overlay"><section class="modal" role="dialog" aria-modal="true" :aria-label="t('执行一次')"><header><div><small>{{ t('任务') }} #{{ execution.id }}</small><h2>{{ t('执行一次') }}</h2></div><button class="icon" :aria-label="t('取消执行')" :title="t('取消')" @click="execution = undefined"><X :size="18" /></button></header><div class="modal-form"><div class="modal-body"><p class="target">{{ execution.jobDesc }}</p><label>{{ t('参数来源') }}<UiSelect v-model="parameterMode" :options="[{ value: 'saved', label: t('使用保存参数') }, { value: 'override', label: t('覆盖参数') }]" /></label><label>{{ t('本次执行参数') }}<textarea v-model="executionParam" :readonly="parameterMode === 'saved'" rows="6" :aria-label="t('本次执行参数')" spellcheck="false" /></label></div><footer><button type="button" @click="execution = undefined">{{ t('取消') }}</button><button type="button" class="primary" :disabled="working" @click="prepareExecution"><Play :size="16" />{{ t('执行一次') }}</button></footer></div></section></div>
     <div v-if="userEditor" class="overlay"><section class="modal editor-dialog" role="dialog" aria-modal="true" :aria-label="t('用户表单')"><header><h2>{{ t(userEditor.id ? '编辑用户' : '新增用户') }}</h2><button class="icon" :aria-label="t('关闭')" @click="userEditor = undefined"><X :size="18" /></button></header><div class="modal-body user-form"><p v-if="error" class="banner error" role="alert">{{ error }}</p><label>{{ t('用户名') }}<input v-model="userEditor.username" maxlength="20" :readonly="!!userEditor.id" autocomplete="off" /></label><label>{{ t('密码') }}<input v-model="userEditor.password" type="password" maxlength="20" autocomplete="new-password" :placeholder="t(userEditor.id ? '留空则不修改' : '4–20 位')" /></label><label>{{ t('角色') }}<UiSelect v-model="userEditor.role" :options="[{ value: 0, label: t('普通用户') }, { value: 1, label: t('管理员') }]" :aria-label="t('角色')" /></label><fieldset v-if="userEditor.role === 0"><legend>{{ t('执行器权限') }}</legend><label v-for="g in groups" :key="g.id" class="inline"><input type="checkbox" :checked="userEditor.permission.split(',').includes(String(g.id))" @change="userEditor.permission = ($event.target as HTMLInputElement).checked ? [...userEditor.permission.split(',').filter(Boolean), String(g.id)].join(',') : userEditor.permission.split(',').filter(id => id !== String(g.id)).join(',')" />{{ g.title }}</label></fieldset></div><footer><button @click="userEditor = undefined">{{ t('取消') }}</button><button class="primary" @click="saveUser">{{ t('保存') }}</button></footer></section></div>
     <div v-if="detail" class="overlay"><section class="modal editor-dialog" role="dialog" aria-modal="true" :aria-label="t('记录详情')"><header><h2>{{ t('记录') }} #{{ detail.id }}</h2><button class="icon" :aria-label="t('关闭记录详情')" :title="t('关闭')" @click="detail = undefined"><X :size="18" /></button></header><div class="detail-body"><dl><template v-for="(value, key) in detail" :key="key"><dt>{{ key }}</dt><dd><pre>{{ value ?? '-' }}</pre></dd></template></dl></div></section></div>
     <div v-if="toast" class="floating-toast" :class="toast.tone" role="alert"><div class="toast-head"><AlertTriangle v-if="toast.tone === 'error'" :size="17" /><Check v-else :size="17" /><strong>{{ toast.title }}</strong><button v-if="toast.detail" type="button" class="toast-detail-button" :aria-expanded="toast.expanded" @click="toggleToastDetail">{{ t(toast.expanded ? '收起详情' : '查看详情') }}</button><button type="button" class="icon" :aria-label="t('关闭提示')" @click="dismissToast"><X :size="16" /></button></div><pre v-if="toast.expanded && toast.detail" class="toast-detail">{{ toast.detail }}</pre></div>

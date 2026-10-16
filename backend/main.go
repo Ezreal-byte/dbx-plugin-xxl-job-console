@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,15 +17,18 @@ import (
 )
 
 const pluginID = "io.dbx.xxljob-console"
-const version = "0.3.3"
+const version = "0.4.0-alpha.1"
 
 type plugin struct {
 	lifecycle sync.Mutex
 	mu        sync.RWMutex
 	sessions  map[string]*session
+	dataDir   string
 }
 
-func newPlugin() *plugin { return &plugin{sessions: map[string]*session{}} }
+func newPlugin() *plugin {
+	return &plugin{sessions: map[string]*session{}, dataDir: os.Getenv("DBX_PLUGIN_DATA_DIR")}
+}
 
 type params struct {
 	Connection   connection      `json:"connection"`
@@ -31,9 +36,23 @@ type params struct {
 	ConnectionID string          `json:"connectionId"`
 	Form         map[string]any  `json:"form"`
 	Confirmed    bool            `json:"confirmed"`
+	PreviewToken string          `json:"previewToken"`
 }
 
 func (p *plugin) Handle(_ sdk.RequestContext, method string, raw json.RawMessage, _ *sdk.Emitter) (any, *sdk.PluginError) {
+	if len(raw) > 512*1024 {
+		return nil, sdk.NewError(-32602, "请求过大")
+	}
+	if method == "mcp/call" {
+		return p.mcpCall(raw), nil
+	}
+	if method == "mcp/tools" || strings.HasPrefix(method, "mcp/settings/") {
+		value, err := p.automationRPC(method, raw)
+		if err != nil {
+			return nil, sdk.NewError(-32000, err.Error())
+		}
+		return value, nil
+	}
 	var v params
 	if json.Unmarshal(raw, &v) != nil {
 		return nil, sdk.NewError(-32602, "无效请求参数")
@@ -100,11 +119,6 @@ func (p *plugin) handle(method string, v params) (any, error) {
 		}
 		return map[string]any{"success": true}, nil
 	}
-	path, isRead := reads[method]
-	writePath, isWrite := mutations[method]
-	if !isRead && !isWrite && method != "xxljob/info" && method != "xxljob/groups" && method != "xxljob/overview" {
-		return nil, fmt.Errorf("不支持的操作 %s", method)
-	}
 	p.mu.RLock()
 	s := p.sessions[v.ConnectionID]
 	p.mu.RUnlock()
@@ -113,6 +127,44 @@ func (p *plugin) handle(method string, v params) (any, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	defer cancel()
+	s.opContext = ctx
+	defer func() { s.opContext = nil }()
+	if method == "xxljob/audit" {
+		return p.auditList(v.ConnectionID)
+	}
+	if method == "xxljob/preview" {
+		return p.uiPreview(s, v.Form)
+	}
+	if guardedMutation(method) {
+		return p.uiExecute(s, method, v)
+	}
+	if method == "xxljob/logs" {
+		form := cloneMap(v.Form)
+		if interval := textValue(form["filterTime"]); interval != "" {
+			parts := strings.Split(interval, " - ")
+			if len(parts) != 2 {
+				return nil, errors.New("日志时间范围无效")
+			}
+			form["from"], form["to"] = parts[0], parts[1]
+		}
+		return s.logPage(form)
+	}
+	if value, handled, err := s.resourceQuery(method, v.Form); handled {
+		return value, err
+	}
+	return s.operation(method, v)
+}
+
+// operation is the shared, session-locked Admin adapter. Mutations reach it only
+// after the UI/MCP preview gate (user management retains its existing gate).
+func (s *session) operation(method string, v params) (any, error) {
+	path, isRead := reads[method]
+	writePath, isWrite := mutations[method]
+	if !isRead && !isWrite && method != "xxljob/info" && method != "xxljob/groups" && method != "xxljob/overview" {
+		return nil, fmt.Errorf("不支持的操作 %s", method)
+	}
 	if e := s.active(); e != nil {
 		return nil, e
 	}
@@ -120,7 +172,7 @@ func (p *plugin) handle(method string, v params) (any, error) {
 		if e := s.refreshAccess(); e != nil {
 			return nil, e
 		}
-		return map[string]any{"name": s.name, "baseUrl": s.base, "environment": s.environment, "readOnly": s.readOnly, "authMode": "password", "admin": s.admin, "username": s.username, "adminVersion": s.adminVersion}, nil
+		return map[string]any{"name": s.name, "baseUrl": s.base, "environment": s.environment, "readOnly": s.readOnly, "isProduction": s.production, "authMode": "password", "admin": s.admin, "username": s.username, "adminVersion": s.adminVersion}, nil
 	}
 	if method == "xxljob/groups" {
 		return s.groups()
@@ -303,6 +355,10 @@ func scalar(value any) (string, error) {
 	switch v := value.(type) {
 	case string:
 		return v, nil
+	case int:
+		return strconv.Itoa(v), nil
+	case int64:
+		return strconv.FormatInt(v, 10), nil
 	case float64:
 		if v == float64(int64(v)) {
 			return strconv.FormatInt(int64(v), 10), nil

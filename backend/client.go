@@ -26,6 +26,7 @@ type config struct {
 	AdminVersion string `json:"admin_version"`
 	Environment  string `json:"environment"`
 	ReadOnly     bool   `json:"read_only"`
+	IsProduction bool   `json:"is_production"`
 }
 type connection struct {
 	ID              string           `json:"id"`
@@ -36,12 +37,43 @@ type connection struct {
 	Password        string           `json:"password"`
 	Config          config           `json:"external_config"`
 	ReadOnly        bool             `json:"read_only"`
+	PluginID        string           `json:"plugin_id"`
+	ProviderID      string           `json:"connection_provider_id"`
+	PluginProvider  string           `json:"plugin_connection_provider"`
+	IsProduction    bool             `json:"is_production"`
 	TransportLayers []transportLayer `json:"transport_layers"`
 }
 type transportLayer struct {
-	Type    string `json:"type"`
-	Enabled *bool  `json:"enabled"`
+	Type    string                     `json:"type"`
+	Enabled *bool                      `json:"enabled"`
+	Extra   map[string]json.RawMessage `json:"-"`
 }
+
+// Retain the full host-owned transport identity, including profile/credential changes.
+func (l *transportLayer) UnmarshalJSON(data []byte) error {
+	type base transportLayer
+	var value base
+	if e := json.Unmarshal(data, &value); e != nil {
+		return e
+	}
+	if e := json.Unmarshal(data, &value.Extra); e != nil {
+		return e
+	}
+	delete(value.Extra, "type")
+	delete(value.Extra, "enabled")
+	*l = transportLayer(value)
+	return nil
+}
+func (l transportLayer) MarshalJSON() ([]byte, error) {
+	value := map[string]json.RawMessage{}
+	for k, v := range l.Extra {
+		value[k] = v
+	}
+	value["type"] = jsonBytes(l.Type)
+	value["enabled"] = jsonBytes(l.Enabled)
+	return json.Marshal(value)
+}
+
 type runtimeEndpoint struct {
 	Host string `json:"host"`
 	Port int    `json:"port"`
@@ -58,6 +90,13 @@ type session struct {
 	loggedIn, expired, closed bool
 	allowed                   []group
 	logRows                   map[int64]map[string]any
+	conn                      connection
+	runtime                   runtimeEndpoint
+	identity                  string
+	production                bool
+	ctx                       context.Context
+	cancel                    context.CancelFunc
+	opContext                 context.Context
 }
 
 func newSession(c connection, runtime runtimeEndpoint) (*session, error) {
@@ -143,7 +182,7 @@ func newSession(c connection, runtime runtimeEndpoint) (*session, error) {
 		if !strings.EqualFold(strings.TrimSpace(c.Host), u.Hostname()) || c.Port != servicePort {
 			return nil, errors.New("已启用 DBX 隧道/代理；请填写 IP 或域名及端口作为服务目标")
 		}
-		if runtime.Host == "" || strings.ContainsAny(runtime.Host, "/@?#\\ \t\r\n") || runtime.Port < 1 || runtime.Port > 65535 {
+		if !validRuntime(c, runtime) {
 			return nil, errors.New("DBX 未提供有效隧道端点；不会绕过代理直连，请检查隧道配置")
 		}
 		target := net.JoinHostPort(runtime.Host, strconv.Itoa(runtime.Port))
@@ -156,10 +195,18 @@ func newSession(c connection, runtime runtimeEndpoint) (*session, error) {
 	if e != nil {
 		return nil, e
 	}
-	return &session{base: u.String(), name: c.Name, environment: c.Config.Environment, username: c.Username, password: c.Password, readOnly: c.ReadOnly || c.Config.ReadOnly, adminVersion: adminVersion, logRows: map[int64]map[string]any{},
+	ctx, cancel := context.WithCancel(context.Background())
+	identity := connectionIdentity(c)
+	safe := c
+	safe.Password = ""
+	safe.TransportLayers = nil
+	return &session{ctx: ctx, cancel: cancel, conn: safe, runtime: runtime, identity: identity, production: c.IsProduction || c.Config.IsProduction, base: u.String(), name: c.Name, environment: c.Config.Environment, username: c.Username, password: c.Password, readOnly: c.ReadOnly || c.Config.ReadOnly, adminVersion: adminVersion, logRows: map[int64]map[string]any{},
 		client: &http.Client{Jar: jar, Transport: transport, Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 func (s *session) close() {
+	if s.cancel != nil {
+		s.cancel()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true
@@ -230,7 +277,14 @@ func (s *session) raw(method, path string, form url.Values, write bool) ([]byte,
 	if e := s.active(); e != nil {
 		return nil, e
 	}
-	req, e := http.NewRequest(method, s.base+path, strings.NewReader(form.Encode()))
+	ctx := s.opContext
+	if ctx == nil {
+		ctx = s.ctx
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, e := http.NewRequestWithContext(ctx, method, s.base+path, strings.NewReader(form.Encode()))
 	if e != nil {
 		return nil, errors.New("服务请求地址无效")
 	}

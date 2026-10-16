@@ -16,6 +16,24 @@ func call(p *plugin, method string, v any) (any, *sdk.PluginError) {
 	b, _ := json.Marshal(v)
 	return p.Handle(sdk.RequestContext{}, method, b, nil)
 }
+
+// adapterCall exercises the version-specific Admin adapter after authorization.
+// Public preview/execute gates are covered independently in automation_test.go.
+func adapterCall(p *plugin, method string, input any) (any, *sdk.PluginError) {
+	b, _ := json.Marshal(input)
+	var v params
+	_ = json.Unmarshal(b, &v)
+	p.mu.RLock()
+	sess := p.sessions[v.ConnectionID]
+	p.mu.RUnlock()
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	result, err := sess.operation(method, v)
+	if err != nil {
+		return nil, sdk.NewError(-32000, err.Error())
+	}
+	return result, nil
+}
 func connected(t *testing.T, handler http.HandlerFunc, readonly bool) (*plugin, *httptest.Server) {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +97,7 @@ func TestTriggerKeepsBlankOverrideAndLegacyForm(t *testing.T) {
 		}
 		fmt.Fprint(w, `{"code":200,"content":null}`)
 	}, false)
-	_, e := call(p, "xxljob/trigger", map[string]any{"connectionId": "a", "confirmed": true, "form": map[string]any{"id": 7, "executorParam": ""}})
+	_, e := adapterCall(p, "xxljob/trigger", map[string]any{"connectionId": "a", "confirmed": true, "form": map[string]any{"id": 7, "executorParam": ""}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -95,7 +113,7 @@ func TestTriggerPassesConfiguredParamToLegacyAdmin(t *testing.T) {
 		}
 		fmt.Fprint(w, `{"code":200,"content":null}`)
 	}, false)
-	if _, e := call(p, "xxljob/trigger", map[string]any{"connectionId": "a", "confirmed": true, "form": map[string]any{"id": 7, "executorParam": "key=配置值"}}); e != nil {
+	if _, e := adapterCall(p, "xxljob/trigger", map[string]any{"connectionId": "a", "confirmed": true, "form": map[string]any{"id": 7, "executorParam": "key=配置值"}}); e != nil {
 		t.Fatal(e)
 	}
 }
@@ -160,12 +178,12 @@ func TestGroupWritesUseOfficialAppnameAndRejectInvalid(t *testing.T) {
 		fmt.Fprint(w, `{"code":200}`)
 	}, false)
 	form := map[string]any{"appname": "demo-executor", "title": "Demo", "addressType": 1, "addressList": "http://node:9999/"}
-	_, e := call(p, "xxljob/saveGroup", map[string]any{"connectionId": "a", "confirmed": true, "form": form})
+	_, e := adapterCall(p, "xxljob/saveGroup", map[string]any{"connectionId": "a", "confirmed": true, "form": form})
 	if e != nil {
 		t.Fatal(e)
 	}
 	form["addressType"] = 2
-	_, e = call(p, "xxljob/saveGroup", map[string]any{"connectionId": "a", "confirmed": true, "form": form})
+	_, e = adapterCall(p, "xxljob/saveGroup", map[string]any{"connectionId": "a", "confirmed": true, "form": form})
 	if e == nil {
 		t.Fatal("invalid addressType accepted")
 	}
@@ -220,12 +238,12 @@ func TestJobValidationKeepsAllEditableLegacyFields(t *testing.T) {
 		fmt.Fprint(w, `{"code":200,"content":"7"}`)
 	}, false)
 	form := map[string]any{"jobGroup": 3, "scheduleType": "CRON", "scheduleConf": "0 0/5 * * * ?", "misfireStrategy": "DO_NOTHING", "jobDesc": "Demo", "author": "demo", "executorRouteStrategy": "FIRST", "executorHandler": "demoHandler", "executorParam": "", "executorBlockStrategy": "SERIAL_EXECUTION", "executorTimeout": 0, "executorFailRetryCount": 2, "glueType": "BEAN", "childJobId": "8,9"}
-	_, e := call(p, "xxljob/saveJob", map[string]any{"connectionId": "a", "confirmed": true, "form": form})
+	_, e := adapterCall(p, "xxljob/saveJob", map[string]any{"connectionId": "a", "confirmed": true, "form": form})
 	if e != nil {
 		t.Fatal(e)
 	}
 	form["glueType"] = "GLUE_SHELL"
-	_, e = call(p, "xxljob/saveJob", map[string]any{"connectionId": "a", "confirmed": true, "form": form})
+	_, e = adapterCall(p, "xxljob/saveJob", map[string]any{"connectionId": "a", "confirmed": true, "form": form})
 	if e == nil {
 		t.Fatal("script creation accepted")
 	}

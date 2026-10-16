@@ -50,11 +50,16 @@ func TestHostPortBuildsServiceURLAndProbes(t *testing.T) {
 	authority = strings.TrimPrefix(srv.URL, "http://")
 	port := srv.Listener.Addr().(*net.TCPAddr).Port
 	for _, layers := range [][]transportLayer{nil, {{Type: "proxy"}}} {
-		s, err := newSession(connection{Host: "127.0.0.1", Port: port, TransportLayers: layers}, runtimeEndpoint{Host: "127.0.0.1", Port: port})
+		host := "127.0.0.1"
+		if layers != nil {
+			host = "admin.internal"
+		}
+		authority = net.JoinHostPort(host, fmt.Sprint(port))
+		s, err := newSession(connection{Host: host, Port: port, TransportLayers: layers}, runtimeEndpoint{Host: "127.0.0.1", Port: port})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if s.base != srv.URL+"/xxl-job-admin" {
+		if s.base != "http://"+authority+"/xxl-job-admin" {
 			t.Errorf("unexpected service URL %s", s.base)
 		}
 		if err := transportProbe(s); err != nil {

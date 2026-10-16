@@ -144,7 +144,7 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 		if method == "xxljob/trigger" {
 			form["executorParam"] = "configured-value"
 		}
-		if _, err := p.handle(method, params{ConnectionID: c.ID, Confirmed: true, Form: form}); err != nil {
+		if _, err := adapterCall(p, method, map[string]any{"connectionId": c.ID, "confirmed": true, "form": form}); err != nil {
 			t.Fatalf("%s: %v", method, err)
 		}
 	}

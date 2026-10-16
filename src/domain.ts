@@ -10,13 +10,14 @@ export type Group = { id?: number; appname: string; title: string; addressType: 
 export type JobOption = { id: number; jobGroup: number; jobDesc: string };
 export type LogRow = { id: number; jobId: number; jobGroup: number; triggerTime: string | number; handleTime?: string | number; triggerCode: number; handleCode: number; triggerMsg?: string; handleMsg?: string; executorAddress: string; executorHandler?: string; executorParam?: string };
 export type Page<T> = { recordsTotal: number; recordsFiltered: number; data: T[] };
-export type Info = { name: string; baseUrl: string; environment: string; readOnly: boolean; authMode: 'password'; admin: boolean; username: string; adminVersion: string };
+export type Info = { name: string; baseUrl: string; environment: string; readOnly: boolean; isProduction?: boolean; authMode: 'password'; admin: boolean; username: string; adminVersion: string };
+export type JobDetail = { job: Job; revision: string; executor: Group; nodes: string[]; recentLogs: LogRow[]; partial: boolean; warning?: string };
 export const schedules = [['NONE', '无调度'], ['CRON', 'Cron'], ['FIX_RATE', '固定间隔']] as const;
 export const misfires = [['DO_NOTHING', '忽略'], ['FIRE_ONCE_NOW', '立即执行一次']] as const;
 export const routes = [['FIRST', '第一个'], ['LAST', '最后一个'], ['ROUND', '轮询'], ['RANDOM', '随机'], ['CONSISTENT_HASH', '一致性 HASH'], ['LEAST_FREQUENTLY_USED', '最不经常使用'], ['LEAST_RECENTLY_USED', '最近最少使用'], ['FAILOVER', '故障转移'], ['BUSYOVER', '忙碌转移'], ['SHARDING_BROADCAST', '分片广播']] as const;
 export const blocks = [['SERIAL_EXECUTION', '单机串行'], ['DISCARD_LATER', '丢弃后续调度'], ['COVER_EARLY', '覆盖之前调度']] as const;
 export function jobStatus(status?: number): { label: string; tone: string } {
-  const states: Record<number, [string, string]> = { 1: ['运行中', 'success'], 0: ['已停止', 'neutral'] };
+  const states: Record<number, [string, string]> = { 1: ['调度已启用', 'success'], 0: ['调度已停止', 'neutral'] };
   const [label, tone] = states[status ?? -1] || ['未知', 'neutral'];
   return { label, tone };
 }
@@ -66,7 +67,7 @@ export function validateGroup(group: Group): string {
   }
   return '';
 }
-export type LogChunk = { fromLineNum: number; toLineNum: number; logContent: string; end: boolean };
+export type LogChunk = { fromLineNum: number; toLineNum: number; logContent: string; end: boolean; truncated?: boolean; partialLine?: boolean };
 export function advanceLog(cursor: number, chunk: LogChunk): { next: number; text: string; end: boolean } {
   if (!chunk || !integer(chunk.fromLineNum, 1) || !integer(chunk.toLineNum) || chunk.fromLineNum !== cursor || typeof chunk.logContent !== 'string' || typeof chunk.end !== 'boolean') throw new Error('执行日志响应不符合原版契约');
   const hasLines = chunk.toLineNum >= cursor && chunk.logContent !== '';

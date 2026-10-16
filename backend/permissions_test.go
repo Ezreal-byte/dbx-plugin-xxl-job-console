@@ -111,7 +111,7 @@ func TestNormalUserCannotAccessOtherExecutorsOrTasks(t *testing.T) {
 	if writes != 0 || groupReads != 0 || jobReads < 1 {
 		t.Fatalf("denied operation reached upstream %d %d %d", writes, groupReads, jobReads)
 	}
-	if _, e = call(p, "xxljob/trigger", map[string]any{"connectionId": "a", "confirmed": true, "form": map[string]any{"id": 7}}); e != nil || writes != 1 {
+	if _, e = adapterCall(p, "xxljob/trigger", map[string]any{"connectionId": "a", "confirmed": true, "form": map[string]any{"id": 7}}); e != nil || writes != 1 {
 		t.Fatal(e, writes)
 	}
 }

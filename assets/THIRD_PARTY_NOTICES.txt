@@ -8,6 +8,8 @@ Full license is included as assets/SDK-LICENSE.txt.
 Vue: MIT License, Copyright (c) 2018-present Yuxi (Evan) You.
 Lucide: ISC License, Copyright (c) 2022 Lucide Contributors.
 Go golang.org/x/net: BSD 3-Clause License, Copyright The Go Authors.
+Go golang.org/x/sys: BSD 3-Clause License, Copyright The Go Authors.
+The x/sys license has the same text as the included assets/GO-NET-LICENSE.txt.
 Go standard library: BSD 3-Clause License, Copyright The Go Authors.
 
 Full dependency license texts are included alongside this notice under assets/.

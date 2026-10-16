@@ -7,4 +7,6 @@ require (
 	golang.org/x/net v0.35.0
 )
 
+require golang.org/x/sys v0.30.0
+
 replace github.com/t8y2/dbx/plugins/sdk/go/dbx-plugin-sdk => ./sdk
