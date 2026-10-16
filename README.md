@@ -14,13 +14,15 @@ Version `0.3.2` re-queries a log in each new workbench tab before reading it, re
 
 Version `0.3.3` fixes missing required executor filters on Admin 3.1.0, updates release metadata for DBX Store scanning, and adds Windows/Linux CI with native package protocol checks. See [release notes](RELEASE_NOTES_0.3.3.md) for compatibility details.
 
-## 0.4.0 alpha: built-in AI and external MCP
+## 0.4.0: built-in AI and external MCP
 
-Version `0.4.0-alpha.1` adds **22 named tools** through DBX's existing Agent and MCP server. The **AI/MCP** panel controls access per connection, defaults to off, and re-enables with query tools only. Models remain configured in DBX. Writes from both the workbench and tools require a backend-generated, expiring preview; plugin permission cannot override DBX read-only policy or Admin account permissions.
+Version `0.4.0` adds **22 named tools** through DBX's existing Agent and MCP server. The **AI/MCP** panel controls access per connection, defaults to off, and re-enables with query tools only. Models remain configured in DBX. Writes from both the workbench and tools require a backend-generated, expiring preview; plugin permission cannot override DBX read-only policy or Admin account permissions.
 
 The workbench adds fresh task details, scoped AI questions, call history, explicit saved/override run parameters, conflict checks and bounded logs. No GLUE source editing, arbitrary HTTP/RPC forwarding or account/password tools are exposed to AI.
 
-See [AI/MCP permissions and protocol](docs/AI_MCP.md), [alpha release notes](RELEASE_NOTES_0.4.0-alpha.1.md), and [verification report](docs/VERIFICATION_0.4.0-alpha.1.md). This alpha is a local Windows review build; it has not been published to Releases or DBX Store.
+Enable the plugin tools in DBX and the **AI/MCP** panel for the intended connection. Built-in AI requires **Agent** mode; external MCP also requires that connection in DBX's MCP allowlist. An independent preview profile must be selected through `DBX_DATA_DIR` by both the desktop and MCP process.
+
+See [AI/MCP permissions and protocol](docs/AI_MCP.md), [0.4.0 release notes](RELEASE_NOTES_0.4.0.md), and [verification report](docs/VERIFICATION_0.4.0.md). GitHub Release assets are unsigned review candidates; DBX Store review and signing are separate.
 
 ## Connect
 
@@ -49,7 +51,7 @@ npm run build
 go -C backend test -race ./...
 go -C backend vet ./...
 npm run package:all
-go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.4.0-alpha.1-windows-x64.dbxp --handshake
+go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.4.0-windows-x64.dbxp --handshake
 ```
 
 `package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, a versioned `SHA256SUMS` file and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.

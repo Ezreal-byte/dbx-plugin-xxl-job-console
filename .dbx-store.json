@@ -1,11 +1,11 @@
 {
   "name": "XXL-JOB Console",
-  "description": "Manage XXL-JOB reports, jobs, logs, executors and users in DBX.",
+  "description": "Manage XXL-JOB tasks, logs and executors with DBX built-in AI and MCP, scoped permissions and confirmed operation previews.",
   "icon": "assets/plugin.svg",
-  "tags": ["xxl-job", "scheduler", "jobs"],
-  "permissions": ["host.workbench"],
+  "tags": ["xxl-job", "scheduler", "jobs", "ai", "mcp"],
+  "permissions": ["host.workbench", "host.ai"],
   "source": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "homepage": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "license": "MIT",
-  "releaseNotes": "Fix HTTP 400 when listing executors on Admin 3.1.0 by sending required empty appname/title filters. Preserve unfiltered results, permission checks and both existing API profiles; this query fix does not establish full Admin 3.2.0 SSO compatibility. Emit plugin + artifacts release metadata for DBX Store scanning and add Windows/Linux CI with native package handshake checks."
+  "releaseNotes": "0.4.0 adds 22 tools for DBX built-in Agent and external MCP, default-off per-connection permissions, grouped and individual tool controls, and call history. Task and executor writes share expiring one-use previews, confirmation, conflict detection and read-only/account checks. Add task details, contextual AI entry points, bounded logs, saved/override run parameters, loading states and unknown-result handling. Requires DBX 0.6.43+ and Host API ^1.4.0; preserves existing connection identities and Admin 2.3.x/3.4.x profiles, including the 0.3.3 required executor filter fix."
 }

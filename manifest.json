@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "io.dbx.xxljob-console",
   "name": "XXL-JOB Console",
-  "version": "0.4.0-alpha.1",
+  "version": "0.4.0",
   "publisher": "ezreal-byte",
   "description": "XXL-JOB task management with DBX AI, MCP, per-connection permissions and previewed operations",
   "icon": "assets/plugin.svg",
