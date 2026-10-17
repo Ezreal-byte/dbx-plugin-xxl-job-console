@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -24,7 +26,17 @@ func TestUnsupportedVersionFailsBeforeSendingCredentials(t *testing.T) {
 }
 
 func TestModernLoginPagingAndWrites(t *testing.T) {
+	for _, version := range []string{"3.4", "3.5"} {
+		t.Run(version, func(t *testing.T) { testModernLoginPagingAndWrites(t, version) })
+	}
+}
+
+func testModernLoginPagingAndWrites(t *testing.T, version string) {
 	requests := map[string]int{}
+	groupKey, jobKey := "title", "jobDesc"
+	if version == "3.5" {
+		groupKey, jobKey = "name", "name"
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests[r.URL.Path]++
 		if r.URL.Path == "/auth/doLogin" {
@@ -53,17 +65,26 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 			if r.Form.Get("offset") != "0" || r.Form.Get("pagesize") != "100" || r.Form.Has("start") {
 				t.Errorf("group pagination not adapted: %v", r.Form)
 			}
-			fmt.Fprint(w, `{"code":200,"data":{"total":1,"data":[{"id":3,"appname":"test-app","title":"Test","addressType":0,"addressList":""}]}}`)
+			if !r.Form.Has(groupKey) || (version == "3.5" && r.Form.Has("title")) {
+				t.Errorf("group name filter not adapted: %v", r.Form)
+			}
+			json.NewEncoder(w).Encode(map[string]any{"code": 200, "data": map[string]any{"total": 1, "data": []any{map[string]any{"id": 3, "appname": "test-app", groupKey: "Test", "addressType": 0, "addressList": "", "accessToken": "executor-test-token"}}}})
 		case "/jobinfo/pageList":
-			if r.Form.Get("offset") != "0" || r.Form.Get("pagesize") != "25" || r.Form.Has("length") {
+			if r.Form.Get("offset") != "0" || (r.Form.Get("pagesize") != "25" && r.Form.Get("pagesize") != "100") || r.Form.Has("length") {
 				t.Errorf("job pagination not adapted: %v", r.Form)
 			}
-			for _, key := range []string{"jobDesc", "executorHandler", "author"} {
+			for _, key := range []string{jobKey, "executorHandler", "author"} {
 				if !r.Form.Has(key) {
 					t.Errorf("missing required modern job filter %s: %v", key, r.Form)
 				}
 			}
-			fmt.Fprint(w, `{"code":200,"data":{"total":1,"data":[{"id":7,"jobGroup":3,"jobDesc":"Test"}]}}`)
+			if version == "3.5" && r.Form.Has("jobDesc") {
+				t.Errorf("legacy job name sent to 3.5: %v", r.Form)
+			}
+			job := defaultJob()
+			job["id"], job["jobGroup"], job[jobKey] = 7, 3, "Test"
+			job["author"], job["executorHandler"] = "tester", "demoHandler"
+			json.NewEncoder(w).Encode(map[string]any{"code": 200, "data": map[string]any{"total": 1, "data": []any{job}}})
 		case "/joblog/pageList":
 			if !r.Form.Has("filterTime") {
 				t.Errorf("missing required modern log filter: %v", r.Form)
@@ -88,7 +109,21 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 				t.Errorf("modern trigger form mismatch: %v", r.Form)
 			}
 			fmt.Fprint(w, `{"code":200,"data":null}`)
-		case "/jobinfo/insert", "/jobgroup/insert":
+		case "/jobinfo/insert", "/jobinfo/update":
+			if r.Form.Get(jobKey) != "Edited job" || (version == "3.5" && r.Form.Has("jobDesc")) {
+				t.Errorf("job write name not adapted: %v", r.Form)
+			}
+			fmt.Fprint(w, `{"code":200,"data":null}`)
+		case "/jobgroup/insert", "/jobgroup/update":
+			if r.Form.Get(groupKey) != "Edited group" || (version == "3.5" && r.Form.Has("title")) {
+				t.Errorf("group write name not adapted: %v", r.Form)
+			}
+			if version == "3.5" && r.URL.Path == "/jobgroup/update" && r.Form.Get("accessToken") != "executor-test-token" {
+				t.Error("executor update did not preserve accessToken")
+			}
+			if version == "3.4" && r.Form.Has("accessToken") {
+				t.Error("3.4 write contract changed")
+			}
 			fmt.Fprint(w, `{"code":200,"data":null}`)
 		case "/chartInfo":
 			if r.Form.Get("startDate") != "2026-09-01 00:00:00" || r.Form.Get("endDate") != "2026-09-07 23:59:59" {
@@ -108,19 +143,50 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 	defer srv.Close()
 	p := newPlugin()
 	c := officialConnection(t, srv.URL, "demo", "test-only")
-	c.Config.AdminVersion = "3.4"
+	c.Config.AdminVersion = version
 	if _, err := p.handle("connection/connect", params{Connection: c}); err != nil {
 		t.Fatal(err)
 	}
 	defer p.handle("connection/disconnect", params{Connection: connection{ID: c.ID}})
 	info, err := p.handle("xxljob/info", params{ConnectionID: c.ID})
-	if err != nil || info.(map[string]any)["adminVersion"] != "3.4" {
+	if err != nil || info.(map[string]any)["adminVersion"] != version {
 		t.Fatalf("version not exposed: %v %v", info, err)
 	}
 	for _, method := range []string{"xxljob/groups", "xxljob/jobs", "xxljob/logs"} {
 		value, err := p.handle(method, params{ConnectionID: c.ID})
 		if err != nil || value == nil {
 			t.Fatalf("%s: %v %v", method, value, err)
+		}
+	}
+	groups, err := p.handle("xxljob/groups", params{ConnectionID: c.ID})
+	if err != nil || groups.([]group)[0].Title != "Test" {
+		t.Fatalf("group name not normalized: %v %v", groups, err)
+	}
+	encoded, _ := json.Marshal(groups)
+	if strings.Contains(string(encoded), "executor-test-token") {
+		t.Fatal("executor token exposed in group response")
+	}
+	options, err := p.handle("xxljob/jobsByGroup", params{ConnectionID: c.ID, Form: map[string]any{"jobGroup": 3}})
+	if err != nil || options.([]map[string]any)[0]["jobDesc"] != "Test" {
+		t.Fatalf("job options name not normalized: %v %v", options, err)
+	}
+	for _, id := range []int{0, 7} {
+		form := defaultJob()
+		form["jobGroup"], form["jobDesc"], form["author"], form["executorHandler"] = 3, "Edited job", "tester", "demoHandler"
+		if id > 0 {
+			form["id"] = id
+		}
+		if _, err := adapterCall(p, "xxljob/saveJob", map[string]any{"connectionId": c.ID, "confirmed": true, "form": form}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []int{0, 3} {
+		form := map[string]any{"appname": "test-app", "title": "Edited group", "addressType": 0, "addressList": ""}
+		if id > 0 {
+			form["id"] = id
+		}
+		if _, err := adapterCall(p, "xxljob/saveGroup", map[string]any{"connectionId": c.ID, "confirmed": true, "form": form}); err != nil {
+			t.Fatal(err)
 		}
 	}
 	if overview, err := p.handle("xxljob/overview", params{ConnectionID: c.ID}); err != nil || overview.(map[string]int)["executors"] != 2 {
@@ -148,7 +214,7 @@ func TestModernLoginPagingAndWrites(t *testing.T) {
 			t.Fatalf("%s: %v", method, err)
 		}
 	}
-	for _, key := range []string{"/auth/doLogin", "/jobinfo/start", "/jobinfo/stop", "/jobinfo/trigger", "/jobinfo/delete", "/jobgroup/delete"} {
+	for _, key := range []string{"/auth/doLogin", "/jobinfo/insert", "/jobinfo/update", "/jobgroup/insert", "/jobgroup/update", "/jobinfo/start", "/jobinfo/stop", "/jobinfo/trigger", "/jobinfo/delete", "/jobgroup/delete"} {
 		if requests[key] != 1 {
 			t.Errorf("expected exactly one %s request, got %d", key, requests[key])
 		}
@@ -223,6 +289,36 @@ func TestGroupListSendsFiltersRequiredByAdmin31(t *testing.T) {
 			}
 			if len(groups) != 1 || groups[0].ID != 3 || groups[0].Title != "Test" {
 				t.Fatalf("unexpected groups %+v", groups)
+			}
+		})
+	}
+}
+
+func TestNameFiltersAcrossVersions(t *testing.T) {
+	for _, version := range []string{"2.3", "3.4", "3.5"} {
+		t.Run(version, func(t *testing.T) {
+			s := &session{adminVersion: version}
+			for _, tc := range []struct{ method, path, key string }{
+				{"xxljob/jobs", "/jobinfo/pageList", "jobDesc"},
+				{"xxljob/saveJob", "/jobinfo/update", "jobDesc"},
+				{"xxljob/jobs", "/jobgroup/pageList", "title"},
+				{"xxljob/saveGroup", "/jobgroup/update", "title"},
+			} {
+				form := url.Values{"id": {"7"}, "start": {"0"}, "length": {"25"}, tc.key: {"search value"}}
+				_, adapted, err := s.adaptRequest(tc.method, tc.path, form)
+				if err != nil {
+					t.Fatal(err)
+				}
+				key := tc.key
+				if version == "3.5" {
+					key = "name"
+				}
+				if adapted.Get(key) != "search value" || (version == "3.5" && adapted.Has(tc.key)) {
+					t.Fatalf("%s %s: %v", version, tc.path, adapted)
+				}
+				if form.Get(tc.key) != "search value" || form.Has("name") {
+					t.Fatal("caller form was changed")
+				}
 			}
 		})
 	}

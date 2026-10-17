@@ -17,6 +17,7 @@ type group struct {
 	Title       string `json:"title"`
 	AddressType int    `json:"addressType"`
 	AddressList string `json:"addressList"`
+	accessToken string
 }
 
 func attrs(n *html.Node) map[string]string {
@@ -177,7 +178,8 @@ func (s *session) groups() ([]group, error) {
 			if app == "" || title == "" || !ok || (mode != 0 && mode != 1) {
 				return nil, errors.New("执行器字段缺失")
 			}
-			result = append(result, group{ID: int(id), Appname: app, Title: title, AddressType: int(mode), AddressList: address})
+			accessToken, _ := row["accessToken"].(string)
+			result = append(result, group{ID: int(id), Appname: app, Title: title, AddressType: int(mode), AddressList: address, accessToken: accessToken})
 		}
 		if float64(len(result)) >= page["recordsFiltered"].(float64) {
 			s.allowed = result
@@ -204,11 +206,15 @@ func (s *session) jobsByGroup(id int) ([]any, error) {
 	if id < 1 || !s.permitGroup(id) {
 		return nil, errors.New("没有该执行器的权限，请选择已授权执行器")
 	}
-	if s.adminVersion == "3.4" {
+	if s.adminVersion != "2.3" {
 		result := []any{}
 		for offset := 0; offset < 10000; offset += 100 {
-			form := url.Values{"offset": {strconv.Itoa(offset)}, "pagesize": {"100"}, "jobGroup": {strconv.Itoa(id)}, "triggerStatus": {"-1"}, "jobDesc": {""}, "executorHandler": {""}, "author": {""}}
-			value, e := s.request("/jobinfo/pageList", form, false)
+			form := url.Values{"start": {strconv.Itoa(offset)}, "length": {"100"}, "jobGroup": {strconv.Itoa(id)}, "triggerStatus": {"-1"}, "jobDesc": {""}, "executorHandler": {""}, "author": {""}}
+			path, form, e := s.adaptRequest("xxljob/jobs", "/jobinfo/pageList", form)
+			if e != nil {
+				return nil, e
+			}
+			value, e := s.request(path, form, false)
 			if e != nil {
 				return nil, e
 			}

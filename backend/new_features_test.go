@@ -8,7 +8,7 @@ import (
 )
 
 func TestUserPathsAcrossAdminVersions(t *testing.T) {
-	for _, version := range []string{"2.3", "3.4"} {
+	for _, version := range []string{"2.3", "3.4", "3.5"} {
 		s := &session{adminVersion: version}
 		form, err := buildForm("xxljob/users", map[string]any{"start": float64(25), "length": float64(25), "username": "demo", "role": float64(0)})
 		if err != nil {
@@ -18,7 +18,7 @@ func TestUserPathsAcrossAdminVersions(t *testing.T) {
 		if err != nil || path != "/user/pageList" {
 			t.Fatalf("%s: %s %v", version, path, err)
 		}
-		if version == "3.4" && (adapted.Get("offset") != "25" || adapted.Get("pagesize") != "25" || adapted.Has("start")) {
+		if version != "2.3" && (adapted.Get("offset") != "25" || adapted.Get("pagesize") != "25" || adapted.Has("start")) {
 			t.Fatalf("modern user pagination: %v", adapted)
 		}
 		if version == "2.3" && (adapted.Get("start") != "25" || adapted.Has("offset")) {
@@ -28,7 +28,7 @@ func TestUserPathsAcrossAdminVersions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if version == "3.4" && (path != "/user/delete" || adapted.Get("ids[]") != "7") {
+		if version != "2.3" && (path != "/user/delete" || adapted.Get("ids[]") != "7") {
 			t.Fatalf("modern delete: %s %v", path, adapted)
 		}
 		if version == "2.3" && (path != "/user/remove" || adapted.Get("id") != "7") {
