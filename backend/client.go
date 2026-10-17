@@ -104,8 +104,8 @@ func newSession(c connection, runtime runtimeEndpoint) (*session, error) {
 	if adminVersion == "" {
 		adminVersion = "2.3" // Previously saved connections predate the version selector.
 	}
-	if adminVersion != "2.3" && adminVersion != "3.4" {
-		return nil, errors.New("仅支持已核验的官方 XXL-JOB Admin 2.3.x 和 3.4.x，请在连接配置中选择版本")
+	if adminVersion != "2.3" && adminVersion != "3.4" && adminVersion != "3.5" {
+		return nil, errors.New("仅支持已核验的官方 XXL-JOB Admin 2.3.x、3.4.x 和 3.5.x，请在连接配置中选择版本")
 	}
 	address := strings.TrimSpace(c.Config.BaseURL)
 	if address == "" {
@@ -222,7 +222,7 @@ func (s *session) probe() error {
 		return errors.New("请填写 XXL-JOB 用户名和密码")
 	}
 	loginPath := "/login"
-	if s.adminVersion == "3.4" {
+	if s.adminVersion != "2.3" {
 		loginPath = "/auth/doLogin"
 	}
 	body, e := s.raw("POST", loginPath, url.Values{"userName": {s.username}, "password": {s.password}}, false)
@@ -238,7 +238,7 @@ func (s *session) probe() error {
 	u, _ := url.Parse(s.base + "/")
 	found := false
 	for _, cookie := range s.client.Jar.Cookies(u) {
-		if cookie.Value != "" && (s.adminVersion == "3.4" || cookie.Name == "XXL_JOB_LOGIN_IDENTITY") {
+		if cookie.Value != "" && (s.adminVersion != "2.3" || cookie.Name == "XXL_JOB_LOGIN_IDENTITY") {
 			found = true
 		}
 	}
@@ -357,13 +357,13 @@ func (s *session) request(path string, form url.Values, write bool) (any, error)
 			}
 			return nil, fmt.Errorf("%s（业务码 %.0f）", msg, code)
 		}
-		if s.adminVersion == "3.4" {
+		if s.adminVersion != "2.3" {
 			if strings.HasSuffix(path, "/pageList") {
 				page, ok := result["data"].(map[string]any)
 				if !ok {
 					return nil, uncertain(write, "缺少分页数据")
 				}
-				return normalizePage(page, write)
+				return s.adaptPage(path, page, write)
 			}
 			if _, ok := result["data"]; !ok {
 				return nil, uncertain(write, "缺少响应数据")

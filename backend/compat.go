@@ -25,6 +25,26 @@ func normalizePage(page map[string]any, write bool) (any, error) {
 	return map[string]any{"recordsTotal": total, "recordsFiltered": total, "data": rows}, nil
 }
 
+// Keep UI and tool field names stable across Admin versions.
+func (s *session) adaptPage(path string, page map[string]any, write bool) (any, error) {
+	normalized, err := normalizePage(page, write)
+	if err != nil {
+		return nil, err
+	}
+	if s.adminVersion == "3.5" {
+		key := map[string]string{"/jobgroup/pageList": "title", "/jobinfo/pageList": "jobDesc"}[path]
+		if key != "" {
+			for _, item := range page["data"].([]any) {
+				if row, ok := item.(map[string]any); ok {
+					row[key] = row["name"]
+					delete(row, "name")
+				}
+			}
+		}
+	}
+	return normalized, nil
+}
+
 func validCount(value float64) bool {
 	return value >= 0 && value <= 9007199254740991 && value == float64(int64(value))
 }
@@ -43,7 +63,7 @@ func (s *session) adaptRequest(method, path string, form url.Values) (string, ur
 		adapted.Set("pagesize", form.Get("length"))
 		adapted.Del("start")
 		adapted.Del("length")
-		if method == "xxljob/jobs" {
+		if method == "xxljob/jobs" && path == "/jobinfo/pageList" {
 			for _, key := range []string{"jobDesc", "executorHandler", "author"} {
 				if _, ok := adapted[key]; !ok {
 					adapted.Set(key, "")
@@ -83,6 +103,16 @@ func (s *session) adaptRequest(method, path string, form url.Values) (string, ur
 	case "xxljob/logContent":
 		adapted.Del("executorAddress")
 		adapted.Del("triggerTime")
+	}
+	if s.adminVersion == "3.5" {
+		switch path {
+		case "/jobgroup/pageList", "/jobgroup/insert", "/jobgroup/update":
+			adapted.Set("name", adapted.Get("title"))
+			adapted.Del("title")
+		case "/jobinfo/pageList", "/jobinfo/insert", "/jobinfo/update":
+			adapted.Set("name", adapted.Get("jobDesc"))
+			adapted.Del("jobDesc")
+		}
 	}
 	return path, adapted, nil
 }

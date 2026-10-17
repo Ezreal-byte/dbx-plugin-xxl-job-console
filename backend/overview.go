@@ -9,7 +9,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-// Both supported Admin versions render these three dashboardInfo values in order.
+// Supported Admin versions render these three dashboardInfo values in order.
 func parseOverview(raw []byte) (map[string]int, error) {
 	doc, err := html.Parse(bytes.NewReader(raw))
 	if err != nil {
@@ -38,7 +38,7 @@ func parseOverview(raw []byte) (map[string]int, error) {
 
 func (s *session) overview() (map[string]int, error) {
 	path := "/"
-	if s.adminVersion == "3.4" {
+	if s.adminVersion != "2.3" {
 		path = "/dashboard"
 	}
 	raw, err := s.raw("GET", path, nil, false)
