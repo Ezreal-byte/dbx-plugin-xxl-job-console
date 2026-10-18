@@ -281,11 +281,16 @@ func (s *session) logSnapshot(form map[string]any) (any, error) {
 	if from < 1 || limit < 1 || limit > 1000 {
 		return nil, errors.New("日志行数超出范围")
 	}
-	ms, e := logMillis(row["triggerTime"])
-	if e != nil {
-		return nil, e
+	request := map[string]any{"logId": row["id"], "fromLineNum": from}
+	if s.adminVersion == "2.3" {
+		ms, e := logMillis(row["triggerTime"])
+		if e != nil {
+			return nil, e
+		}
+		request["executorAddress"] = row["executorAddress"]
+		request["triggerTime"] = ms
 	}
-	value, e := s.operation("xxljob/logContent", params{Form: map[string]any{"logId": row["id"], "fromLineNum": from, "executorAddress": row["executorAddress"], "triggerTime": ms}})
+	value, e := s.operation("xxljob/logContent", params{Form: request})
 	if e != nil {
 		return nil, e
 	}

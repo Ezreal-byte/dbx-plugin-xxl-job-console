@@ -201,6 +201,10 @@ func testModernLoginPagingAndWrites(t *testing.T, version string) {
 	if _, err := p.handle("xxljob/logContent", params{ConnectionID: c.ID, Form: map[string]any{"logId": float64(11), "fromLineNum": float64(1)}}); err != nil {
 		t.Fatal(err)
 	}
+	chunk, err := p.handle("xxljob/logSnapshot", params{ConnectionID: c.ID, Form: map[string]any{"logId": 11, "jobId": 7, "jobGroup": 3, "from": "2026-09-18 00:00:00", "to": "2026-09-18 23:59:59"}})
+	if err != nil || chunk.(map[string]any)["logContent"] != "ok" {
+		t.Fatalf("modern log snapshot with formatted timestamp: %v %v", chunk, err)
+	}
 	for _, method := range []string{"xxljob/start", "xxljob/stop", "xxljob/trigger", "xxljob/removeJob", "xxljob/removeGroup"} {
 		id := 7
 		if method == "xxljob/removeGroup" {
