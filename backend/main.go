@@ -17,7 +17,7 @@ import (
 )
 
 const pluginID = "io.dbx.xxljob-console"
-const version = "0.4.0"
+const version = "0.4.1"
 
 type plugin struct {
 	lifecycle sync.Mutex
@@ -291,6 +291,12 @@ func (s *session) operation(method string, v params) (any, error) {
 					if g.Appname != form.Get("appname") {
 						return nil, errors.New("编辑执行器不能变更 AppName")
 					}
+					if s.adminVersion == "3.5" {
+						if !g.accessTokenKnown {
+							return nil, errors.New("无法确认执行器原有访问令牌，已取消更新；请刷新或在官方 Admin 页面编辑")
+						}
+						form.Set("accessToken", g.accessToken)
+					}
 				}
 			}
 			if !match {
@@ -472,7 +478,7 @@ func buildForm(method string, input map[string]any, version ...string) (url.Valu
 	}
 	if method == "xxljob/logContent" {
 		keys := []string{"logId", "fromLineNum"}
-		if len(version) == 0 || version[0] != "3.4" {
+		if len(version) == 0 || (version[0] != "3.4" && version[0] != "3.5") {
 			keys = append(keys, "triggerTime")
 		}
 		for _, key := range keys {
@@ -480,7 +486,7 @@ func buildForm(method string, input map[string]any, version ...string) (url.Valu
 				return nil, e
 			}
 		}
-		if len(version) == 0 || version[0] != "3.4" {
+		if len(version) == 0 || (version[0] != "3.4" && version[0] != "3.5") {
 			u, e := url.Parse(form.Get("executorAddress"))
 			if e != nil || u.Hostname() == "" || u.User != nil || (u.Scheme != "http" && u.Scheme != "https") {
 				return nil, errors.New("执行器地址无效")

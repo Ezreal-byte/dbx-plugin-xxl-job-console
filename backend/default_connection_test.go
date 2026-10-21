@@ -98,8 +98,10 @@ func TestVersionPathsAndCustomPath(t *testing.T) {
 		{"legacy fallback", "", "", "/xxl-job-admin/login"},
 		{"2.3 default", "2.3", "", "/xxl-job-admin/login"},
 		{"3.4 default", "3.4", "", "/auth/doLogin"},
+		{"3.5 default", "3.5", "", "/auth/doLogin"},
 		{"2.3 configured", "2.3", "/xxl-job-admin", "/xxl-job-admin/login"},
 		{"3.4 custom", "3.4", "/custom", "/custom/auth/doLogin"},
+		{"3.5 custom", "3.5", "/custom", "/custom/auth/doLogin"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
@@ -122,7 +124,7 @@ func TestVersionPathsAndCustomPath(t *testing.T) {
 					return
 				}
 				cookie := "XXL_SSO_TOKEN"
-				if tc.version != "3.4" {
+				if tc.version == "" || tc.version == "2.3" {
 					cookie = "XXL_JOB_LOGIN_IDENTITY"
 				}
 				http.SetCookie(w, &http.Cookie{Name: cookie, Value: "fixture", Path: "/"})

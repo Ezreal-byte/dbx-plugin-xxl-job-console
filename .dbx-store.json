@@ -7,5 +7,5 @@
   "source": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "homepage": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "license": "MIT",
-  "releaseNotes": "0.4.0 adds 22 tools for DBX built-in Agent and external MCP, default-off per-connection permissions, grouped and individual tool controls, and call history. Task and executor writes share expiring one-use previews, confirmation, conflict detection and read-only/account checks. Add task details, contextual AI entry points, bounded logs, saved/override run parameters, loading states and unknown-result handling. Requires DBX 0.6.43+ and Host API ^1.4.0; preserves existing connection identities and Admin 2.3.x/3.4.x profiles, including the 0.3.3 required executor filter fix."
+  "releaseNotes": "0.4.1 adds an explicit Admin 3.5.x profile with executor/job name mapping for filters, lists and writes, and fixes modern log snapshots with formatted timestamps. Executor updates preserve the latest access token without exposing it to UI/MCP and reject missing or malformed token data. Keeps the 0.4.0 AI/MCP tools, scoped permissions and preview confirmations; extends public UI/MCP safety regression to all three profiles. New connections still default to 3.4.x; select 3.5.x manually for Admin 3.5.0. Requires DBX 0.6.43+ and Host API ^1.4.0."
 }

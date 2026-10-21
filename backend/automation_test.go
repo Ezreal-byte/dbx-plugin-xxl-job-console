@@ -15,13 +15,14 @@ import (
 )
 
 type automationFixture struct {
-	mu        sync.Mutex
-	jobs      map[int64]map[string]any
-	writes    []string
-	forms     []url.Values
-	logins    int
-	dropWrite bool
-	modern    bool
+	mu          sync.Mutex
+	jobs        map[int64]map[string]any
+	writes      []string
+	forms       []url.Values
+	logins      int
+	dropWrite   bool
+	modern      bool
+	accessToken string
 }
 
 func (s *automationFixture) recordedWrites() []string {
@@ -48,7 +49,20 @@ func (s *automationFixture) loginCount() int {
 
 func fixturePlugin(t *testing.T, modern bool) (*plugin, connection, *automationFixture) {
 	t.Helper()
-	state := &automationFixture{jobs: map[int64]map[string]any{}, modern: modern}
+	version := "2.3"
+	if modern {
+		version = "3.4"
+	}
+	return fixturePluginVersion(t, version)
+}
+
+const automationExecutorToken = "fixture-executor-token-do-not-expose"
+const automationRotatedExecutorToken = "fixture-rotated-executor-token-do-not-expose"
+
+func fixturePluginVersion(t *testing.T, version string) (*plugin, connection, *automationFixture) {
+	t.Helper()
+	modern := version != "2.3"
+	state := &automationFixture{jobs: map[int64]map[string]any{}, modern: modern, accessToken: automationExecutorToken}
 	job := defaultJob()
 	job["id"] = float64(7)
 	job["jobGroup"] = float64(1)
@@ -91,7 +105,13 @@ func fixturePlugin(t *testing.T, modern bool) (*plugin, connection, *automationF
 		case "/jobinfo":
 			fmt.Fprint(w, `<select id="jobGroup"><option value="1">Permitted</option></select>`)
 		case "/jobgroup/pageList":
-			page([]any{map[string]any{"id": 1, "appname": "demo-executor", "title": "Demo executor", "addressType": 0, "addressList": "http://node:9999/"}}, 1)
+			group := map[string]any{"id": 1, "appname": "demo-executor", "title": "Demo executor", "addressType": 0, "addressList": "http://node:9999/"}
+			if version == "3.5" {
+				group["name"] = group["title"]
+				delete(group, "title")
+				group["accessToken"] = state.accessToken
+			}
+			page([]any{group}, 1)
 		case "/joblog/getJobsByGroup":
 			rows := []any{}
 			for _, job := range state.jobs {
@@ -103,7 +123,12 @@ func fixturePlugin(t *testing.T, modern bool) (*plugin, connection, *automationF
 			for _, job := range state.jobs {
 				g := number(r.Form.Get("jobGroup"))
 				if g <= 0 || g == number(job["jobGroup"]) {
-					rows = append(rows, cloneMap(job))
+					row := cloneMap(job)
+					if version == "3.5" {
+						row["name"] = row["jobDesc"]
+						delete(row, "jobDesc")
+					}
+					rows = append(rows, row)
 				}
 			}
 			total := len(rows)
@@ -155,12 +180,20 @@ func fixturePlugin(t *testing.T, modern bool) (*plugin, connection, *automationF
 				delete(state.jobs, id)
 			case "/jobinfo/update":
 				for k := range r.Form {
-					state.jobs[id][k] = r.Form.Get(k)
+					key := k
+					if version == "3.5" && k == "name" {
+						key = "jobDesc"
+					}
+					state.jobs[id][key] = r.Form.Get(k)
 				}
 			case "/jobinfo/add", "/jobinfo/insert":
 				copy := map[string]any{}
 				for k := range r.Form {
-					copy[k] = r.Form.Get(k)
+					key := k
+					if version == "3.5" && k == "name" {
+						key = "jobDesc"
+					}
+					copy[key] = r.Form.Get(k)
 				}
 				copy["id"] = float64(8)
 				copy["triggerStatus"] = float64(0)
@@ -175,9 +208,7 @@ func fixturePlugin(t *testing.T, modern bool) (*plugin, connection, *automationF
 	p := newPlugin()
 	p.dataDir = t.TempDir()
 	c := officialConnection(t, server.URL, "demo", "fixture-password")
-	if modern {
-		c.Config.AdminVersion = "3.4"
-	}
+	c.Config.AdminVersion = version
 	t.Cleanup(func() {
 		p.mu.RLock()
 		all := []*session{}
@@ -291,10 +322,22 @@ func TestAutomationPolicyIsolationCorruptionAndRevision(t *testing.T) {
 	}
 }
 func TestPreviewExecuteBothAdminProfiles(t *testing.T) {
-	for _, modern := range []bool{false, true} {
-		t.Run(fmt.Sprint(modern), func(t *testing.T) {
-			p, c, state := fixturePlugin(t, modern)
-			grant(t, p, c, "start_job", "stop_job", "trigger_job", "update_job", "copy_job", "delete_job")
+	for _, version := range []string{"2.3", "3.4", "3.5"} {
+		t.Run(version, func(t *testing.T) {
+			p, c, state := fixturePluginVersion(t, version)
+			grant(t, p, c, "start_job", "stop_job", "trigger_job", "update_job", "copy_job", "delete_job", "update_executor", "list_executors", "get_executor")
+			assertNoToken := func(value any) {
+				t.Helper()
+				encoded := string(jsonBytes(value))
+				if strings.Contains(encoded, automationExecutorToken) || strings.Contains(encoded, automationRotatedExecutorToken) || strings.Contains(encoded, "accessToken") {
+					t.Fatal("executor token exposed in public output")
+				}
+			}
+			assertNoToken(resultObject(t, mcp(p, c, "list_executors", nil)))
+			assertNoToken(resultObject(t, mcp(p, c, "get_executor", map[string]any{"executor_id": 1})))
+			if !mcp(p, c, "start_job", map[string]any{"job_id": 7, "executor_id": 1, "preview_token": "invalid-token"}).IsError || len(state.recordedWrites()) != 0 {
+				t.Fatal("invalid token allowed a write")
+			}
 			args := map[string]any{"job_id": 7, "executor_id": 1}
 			key := previewTool(t, p, c, "start_job", args)
 			if len(state.recordedWrites()) != 0 {
@@ -325,6 +368,30 @@ func TestPreviewExecuteBothAdminProfiles(t *testing.T) {
 			resultObject(t, mcp(p, c, "copy_job", copy))
 			if form := state.recordedForm(3); form.Has("triggerStatus") || form.Has("id") {
 				t.Fatal("copy inherited identity/schedule")
+			}
+			executor := map[string]any{"executor_id": 1, "fields": map[string]any{"title": "Changed executor"}}
+			preview := resultObject(t, mcp(p, c, "update_executor", executor))
+			assertNoToken(preview)
+			executor["preview_token"] = preview["previewToken"]
+			if version == "3.5" {
+				state.mu.Lock()
+				state.accessToken = automationRotatedExecutorToken
+				state.mu.Unlock()
+			}
+			readonly := c
+			readonly.ReadOnly = true
+			if !mcp(p, readonly, "update_executor", executor).IsError || len(state.recordedWrites()) != 4 {
+				t.Fatal("read-only MCP connection allowed a write")
+			}
+			assertNoToken(resultObject(t, mcp(p, c, "update_executor", executor)))
+			if len(state.recordedWrites()) != 5 || state.recordedWrites()[4] != "/jobgroup/update" {
+				t.Fatal(state.recordedWrites())
+			}
+			if version == "3.5" {
+				form := state.recordedForm(4)
+				if form.Get("accessToken") != automationRotatedExecutorToken || form.Get("name") != "Changed executor" || form.Has("title") {
+					t.Fatal("3.5 public executor update failed to preserve the token or adapt the name")
+				}
 			}
 		})
 	}
@@ -375,8 +442,23 @@ func TestPreviewBindingExpiryChangesAndReadonly(t *testing.T) {
 	}
 }
 func TestPublicUIRequiresBoundPreview(t *testing.T) {
-	p, c, state := fixturePlugin(t, false)
+	for _, version := range []string{"2.3", "3.4", "3.5"} {
+		t.Run(version, func(t *testing.T) {
+			testPublicUIRequiresBoundPreview(t, version)
+		})
+	}
+}
+
+func testPublicUIRequiresBoundPreview(t *testing.T, version string) {
+	p, c, state := fixturePluginVersion(t, version)
 	connectFixture(t, p, c)
+	groups, e := p.handle("xxljob/groups", params{ConnectionID: c.ID})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if encoded := string(jsonBytes(groups)); strings.Contains(encoded, automationExecutorToken) || strings.Contains(encoded, "accessToken") {
+		t.Fatal("executor token exposed in public UI response")
+	}
 	form := map[string]any{"id": 7, "jobGroup": 1}
 	if _, e := p.handle("xxljob/start", params{ConnectionID: c.ID, Form: form, Confirmed: true}); e == nil {
 		t.Fatal("confirmed boolean bypassed preview")
@@ -389,6 +471,13 @@ func TestPublicUIRequiresBoundPreview(t *testing.T) {
 		t.Fatal("UI preview wrote")
 	}
 	token := v.(map[string]any)["previewToken"].(string)
+	c.ReadOnly = true
+	connectFixture(t, p, c)
+	if _, e = p.handle("xxljob/start", params{ConnectionID: c.ID, Form: form, Confirmed: true, PreviewToken: token}); e == nil || len(state.recordedWrites()) != 0 {
+		t.Fatal("read-only UI connection allowed a write")
+	}
+	c.ReadOnly = false
+	connectFixture(t, p, c)
 	if _, e = p.handle("xxljob/start", params{ConnectionID: c.ID, Form: form, Confirmed: true, PreviewToken: token}); e != nil || len(state.recordedWrites()) != 1 {
 		t.Fatal(e, state.recordedWrites())
 	}
