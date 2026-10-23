@@ -61,7 +61,7 @@ const automationRotatedExecutorToken = "fixture-rotated-executor-token-do-not-ex
 
 func fixturePluginVersion(t *testing.T, version string) (*plugin, connection, *automationFixture) {
 	t.Helper()
-	modern := version != "2.3"
+	modern := version != "2.2" && version != "2.3"
 	state := &automationFixture{jobs: map[int64]map[string]any{}, modern: modern, accessToken: automationExecutorToken}
 	job := defaultJob()
 	job["id"] = float64(7)
@@ -72,6 +72,16 @@ func fixturePluginVersion(t *testing.T, version string) (*plugin, connection, *a
 	job["executorParam"] = "password=secret-value"
 	job["triggerStatus"] = float64(0)
 	state.jobs[7] = job
+	wireJob := func(job map[string]any) map[string]any {
+		row := cloneMap(job)
+		if version == "2.2" {
+			row["jobCron"] = row["scheduleConf"]
+			delete(row, "scheduleType")
+			delete(row, "scheduleConf")
+			delete(row, "misfireStrategy")
+		}
+		return row
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		state.mu.Lock()
 		defer state.mu.Unlock()
@@ -115,7 +125,7 @@ func fixturePluginVersion(t *testing.T, version string) (*plugin, connection, *a
 		case "/joblog/getJobsByGroup":
 			rows := []any{}
 			for _, job := range state.jobs {
-				rows = append(rows, job)
+				rows = append(rows, wireJob(job))
 			}
 			reply(rows)
 		case "/jobinfo/pageList":
@@ -123,7 +133,7 @@ func fixturePluginVersion(t *testing.T, version string) (*plugin, connection, *a
 			for _, job := range state.jobs {
 				g := number(r.Form.Get("jobGroup"))
 				if g <= 0 || g == number(job["jobGroup"]) {
-					row := cloneMap(job)
+					row := wireJob(job)
 					if version == "3.5" {
 						row["name"] = row["jobDesc"]
 						delete(row, "jobDesc")
@@ -158,8 +168,20 @@ func fixturePluginVersion(t *testing.T, version string) (*plugin, connection, *a
 		case "/chartInfo":
 			reply(map[string]any{"triggerDayList": []string{"2026-10-16"}})
 		case "/jobinfo/nextTriggerTime":
+			if version == "2.2" && (r.Form.Get("cron") == "" || r.Form.Has("scheduleConf") || r.Form.Has("scheduleType")) {
+				t.Error("2.2 Cron preview requires cron, not schedule fields")
+				http.Error(w, "invalid cron contract", http.StatusBadRequest)
+				return
+			}
 			reply([]string{"2026-10-16 14:00:00"})
 		default:
+			if version == "2.2" && (r.URL.Path == "/jobinfo/add" || r.URL.Path == "/jobinfo/update") {
+				if r.Form.Get("jobCron") == "" || r.Form.Has("scheduleConf") || r.Form.Has("scheduleType") || r.Form.Has("misfireStrategy") {
+					t.Error("2.2 job write requires jobCron and no modern scheduling fields")
+					http.Error(w, "invalid job contract", http.StatusBadRequest)
+					return
+				}
+			}
 			state.writes = append(state.writes, r.URL.Path)
 			state.forms = append(state.forms, r.Form)
 			if state.dropWrite {
@@ -181,15 +203,21 @@ func fixturePluginVersion(t *testing.T, version string) (*plugin, connection, *a
 			case "/jobinfo/update":
 				for k := range r.Form {
 					key := k
+					if version == "2.2" && k == "jobCron" {
+						key = "scheduleConf"
+					}
 					if version == "3.5" && k == "name" {
 						key = "jobDesc"
 					}
 					state.jobs[id][key] = r.Form.Get(k)
 				}
 			case "/jobinfo/add", "/jobinfo/insert":
-				copy := map[string]any{}
+				copy := defaultJob()
 				for k := range r.Form {
 					key := k
+					if version == "2.2" && k == "jobCron" {
+						key = "scheduleConf"
+					}
 					if version == "3.5" && k == "name" {
 						key = "jobDesc"
 					}
@@ -322,7 +350,7 @@ func TestAutomationPolicyIsolationCorruptionAndRevision(t *testing.T) {
 	}
 }
 func TestPreviewExecuteBothAdminProfiles(t *testing.T) {
-	for _, version := range []string{"2.3", "3.4", "3.5"} {
+	for _, version := range []string{"2.2", "2.3", "3.4", "3.5"} {
 		t.Run(version, func(t *testing.T) {
 			p, c, state := fixturePluginVersion(t, version)
 			grant(t, p, c, "start_job", "stop_job", "trigger_job", "update_job", "copy_job", "delete_job", "update_executor", "list_executors", "get_executor")
@@ -442,7 +470,7 @@ func TestPreviewBindingExpiryChangesAndReadonly(t *testing.T) {
 	}
 }
 func TestPublicUIRequiresBoundPreview(t *testing.T) {
-	for _, version := range []string{"2.3", "3.4", "3.5"} {
+	for _, version := range []string{"2.2", "2.3", "3.4", "3.5"} {
 		t.Run(version, func(t *testing.T) {
 			testPublicUIRequiresBoundPreview(t, version)
 		})

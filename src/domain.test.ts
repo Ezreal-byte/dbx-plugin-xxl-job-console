@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { jobStatus, jobForm, groupForm, newJob, validateJob, validateGroup, advanceLog, triggerMillis, filterTime } from './domain';
+import { jobStatus, jobForm, groupForm, newJob, jobSchedules, validateJob, validateGroup, advanceLog, triggerMillis, filterTime } from './domain';
 
 describe('official 2.3.0 domain contracts', () => {
+  it('offers and validates only capabilities available in 2.2.x', () => {
+    expect(jobSchedules('2.2').map(([key]) => key)).toEqual(['CRON']);
+    expect(jobSchedules('2.3').map(([key]) => key)).toEqual(['NONE', 'CRON', 'FIX_RATE']);
+    const job = { ...newJob(1), jobDesc: 'Demo', author: 'tester', executorHandler: 'demo' };
+    expect(validateJob(job, '2.2')).toBe('');
+    for (const scheduleType of ['NONE', 'FIX_RATE']) expect(validateJob({ ...job, scheduleType }, '2.2')).toContain('仅支持 Cron');
+    expect(validateJob({ ...job, misfireStrategy: 'FIRE_ONCE_NOW' }, '2.2')).toContain('固定过期策略');
+    const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+    const provider = manifest.contributions.find((c: { type: string }) => c.type === 'connection-provider');
+    const version = provider.fields.find((f: { key: string }) => f.key === 'admin_version');
+    expect(version.default).toBe('3.4');
+    expect(version.options.some((v: { value: string }) => v.value === '2.2')).toBe(true);
+    for (const locale of Object.values(manifest.localizations) as any[]) expect(locale.contributions[provider.id].fields.admin_version.options['2.2']).toContain('2.2.x');
+  });
   it('uses one required host/port pair without a duplicate service address', () => {
     const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
     const fields = manifest.contributions.find((c: { type: string }) => c.type === 'connection-provider').fields;

@@ -104,8 +104,8 @@ func newSession(c connection, runtime runtimeEndpoint) (*session, error) {
 	if adminVersion == "" {
 		adminVersion = "2.3" // Previously saved connections predate the version selector.
 	}
-	if adminVersion != "2.3" && adminVersion != "3.4" && adminVersion != "3.5" {
-		return nil, errors.New("仅支持已核验的官方 XXL-JOB Admin 2.3.x、3.4.x 和 3.5.x，请在连接配置中选择版本")
+	if !legacyAdminAPI(adminVersion) && adminVersion != "3.4" && adminVersion != "3.5" {
+		return nil, errors.New("仅支持已核验的官方 XXL-JOB Admin 2.2.x、2.3.x、3.4.x 和 3.5.x，请在连接配置中选择版本")
 	}
 	address := strings.TrimSpace(c.Config.BaseURL)
 	if address == "" {
@@ -116,7 +116,7 @@ func newSession(c connection, runtime runtimeEndpoint) (*session, error) {
 		path := c.Config.ContextPath
 		if path == "" {
 			path = "/"
-			if adminVersion == "2.3" {
+			if legacyAdminAPI(adminVersion) {
 				path = "/xxl-job-admin"
 			}
 		}
@@ -222,7 +222,7 @@ func (s *session) probe() error {
 		return errors.New("请填写 XXL-JOB 用户名和密码")
 	}
 	loginPath := "/login"
-	if s.adminVersion != "2.3" {
+	if !legacyAdminAPI(s.adminVersion) {
 		loginPath = "/auth/doLogin"
 	}
 	body, e := s.raw("POST", loginPath, url.Values{"userName": {s.username}, "password": {s.password}}, false)
@@ -238,7 +238,7 @@ func (s *session) probe() error {
 	u, _ := url.Parse(s.base + "/")
 	found := false
 	for _, cookie := range s.client.Jar.Cookies(u) {
-		if cookie.Value != "" && (s.adminVersion != "2.3" || cookie.Name == "XXL_JOB_LOGIN_IDENTITY") {
+		if cookie.Value != "" && (!legacyAdminAPI(s.adminVersion) || cookie.Name == "XXL_JOB_LOGIN_IDENTITY") {
 			found = true
 		}
 	}
@@ -345,7 +345,7 @@ func (s *session) request(path string, form url.Values, write bool) (any, error)
 			if write {
 				return nil, uncertain(true, "接口返回 HTML 而非 JSON，可能为登录页")
 			}
-			return nil, errors.New("接口返回 HTML 而非 JSON，请检查应用路径和原版 2.3.0 部署")
+			return nil, errors.New("接口返回 HTML 而非 JSON，请检查应用路径和所选 Admin 版本")
 		}
 		return nil, uncertain(write, "不是 JSON 对象")
 	}
@@ -357,7 +357,7 @@ func (s *session) request(path string, form url.Values, write bool) (any, error)
 			}
 			return nil, fmt.Errorf("%s（业务码 %.0f）", msg, code)
 		}
-		if s.adminVersion != "2.3" {
+		if !legacyAdminAPI(s.adminVersion) {
 			if strings.HasSuffix(path, "/pageList") {
 				page, ok := result["data"].(map[string]any)
 				if !ok {
@@ -375,8 +375,8 @@ func (s *session) request(path string, form url.Values, write bool) (any, error)
 		}
 		return result["content"], nil
 	}
-	if s.adminVersion == "2.3" && strings.HasSuffix(path, "/pageList") {
-		return normalizeLegacyPage(result, write)
+	if legacyAdminAPI(s.adminVersion) && strings.HasSuffix(path, "/pageList") {
+		return s.adaptLegacyPage(path, result, write)
 	}
 	return nil, uncertain(write, "响应不符合所选 XXL-JOB 版本接口契约")
 }

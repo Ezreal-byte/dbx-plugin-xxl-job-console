@@ -8,6 +8,8 @@ export function setLocale(value?: string) {
 }
 type Language = 'en' | 'zh-TW' | 'ja' | 'ko' | 'es' | 'it' | 'pt';
 const entries: Record<string, [string, string, string, string, string, string, string]> = {
+  '2.2.x 仅支持 Cron 调度': ['2.2.x supports Cron scheduling only','2.2.x 僅支援 Cron 排程','2.2.x は Cron のみ対応','2.2.x는 Cron만 지원','2.2.x solo admite Cron','2.2.x supporta solo Cron','2.2.x suporta apenas Cron'],
+  '2.2.x 使用固定过期策略': ['2.2.x has a fixed misfire policy','2.2.x 使用固定過期策略','2.2.x の期限切れ処理は固定です','2.2.x의 만료 정책은 고정입니다','2.2.x tiene una política de vencimiento fija','2.2.x ha una politica di scadenza fissa','2.2.x tem uma política de expiração fixa'],
   '更多': ['More','更多','その他','더 보기','Más','Altro','Mais'],
   '注册节点': ['Registered nodes','註冊節點','登録ノード','등록 노드','Nodos registrados','Nodi registrati','Nós registrados'],
   '暂无注册节点': ['No registered nodes','暫無註冊節點','登録ノードなし','등록된 노드 없음','Sin nodos registrados','Nessun nodo registrato','Sem nós registrados'],

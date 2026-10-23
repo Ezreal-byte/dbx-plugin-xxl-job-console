@@ -282,7 +282,7 @@ func (s *session) logSnapshot(form map[string]any) (any, error) {
 		return nil, errors.New("日志行数超出范围")
 	}
 	request := map[string]any{"logId": row["id"], "fromLineNum": from}
-	if s.adminVersion == "2.3" {
+	if legacyAdminAPI(s.adminVersion) {
 		ms, e := logMillis(row["triggerTime"])
 		if e != nil {
 			return nil, e

@@ -290,6 +290,9 @@ func (s *session) planMutation(name string, args map[string]any) (mutationPlan, 
 	if e = validateMutation(plan.Method, normalized); e != nil {
 		return fail(e)
 	}
+	if s.adminVersion == "2.2" && plan.Method == "xxljob/saveJob" {
+		plan.Warnings = append(plan.Warnings, "Admin 2.2.x 仅支持 Cron，过期策略由服务器固定处理；DO_NOTHING 仅为兼容显示值")
+	}
 	return plan, nil
 }
 func (p *plugin) mutation(s *session, name string, args map[string]any, token string, automated bool) (value any, err error) {

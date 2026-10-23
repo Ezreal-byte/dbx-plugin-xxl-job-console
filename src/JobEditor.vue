@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { CalendarClock, Save, X } from '@lucide/vue';
-import { type Job, type Group, routes, blocks, schedules, misfires, validateJob } from './domain';
+import { type Job, type Group, routes, blocks, jobSchedules, misfires, validateJob } from './domain';
 import { t } from './i18n';
 import CronBuilder from './CronBuilder.vue';
 import UiSelect from './UiSelect.vue';
 
-const props = defineProps<{ job: Job; groups: Group[]; connectionId: string; busy: boolean; suspended?: boolean; serverError?: string }>();
+const props = defineProps<{ job: Job; groups: Group[]; connectionId: string; adminVersion?: string; busy: boolean; suspended?: boolean; serverError?: string }>();
 const emit = defineEmits<{ save: [job: Job]; close: [] }>();
 const original = JSON.stringify(props.job);
 const form = ref<Job>({ ...props.job });
 const error = ref(''), cronOpen = ref(false), cronStyle = ref<Record<string, string>>({});
 const groupOptions = computed(() => [{ value: 0, label: t('选择执行器'), disabled: true }, ...(props.job.id && !props.groups.some(g => g.id === form.value.jobGroup) ? [{ value: form.value.jobGroup, label: `#${form.value.jobGroup}` }] : []), ...props.groups.map(g => ({ value: g.id ?? 0, label: `${g.title} · ${g.appname}` }))]);
-const scheduleOptions = computed(() => schedules.map(([value, label]) => ({ value, label: t(label) })));
+const scheduleOptions = computed(() => jobSchedules(props.adminVersion).map(([value, label]) => ({ value, label: t(label) })));
 const misfireOptions = computed(() => misfires.map(([value, label]) => ({ value, label: t(label) })));
 const routeOptions = computed(() => routes.map(([value, label]) => ({ value, label: t(label) })));
 const blockOptions = computed(() => blocks.map(([value, label]) => ({ value, label: t(label) })));
@@ -27,7 +27,7 @@ function toggleCron(event: MouseEvent) {
   cronOpen.value = true;
 }
 function save() {
-  error.value = t(validateJob(form.value));
+  error.value = t(validateJob(form.value, props.adminVersion));
   if (!error.value) { cronOpen.value = false; emit('save', structuredClone({ ...form.value })); }
 }
 </script>
@@ -46,7 +46,8 @@ function save() {
       <section class="job-section"><h3>{{ t('调度配置') }}</h3><div class="job-fields">
         <label class="required">{{ t('调度类型') }}<UiSelect v-model="form.scheduleType" :options="scheduleOptions" :aria-label="t('调度类型')" :disabled="busy" /></label>
         <div v-if="form.scheduleType !== 'NONE'" class="cron-field"><label class="required">{{ form.scheduleType === 'CRON' ? t('Cron 表达式') : t('间隔（秒）') }}<input v-model="form.scheduleConf" required :type="form.scheduleType === 'FIX_RATE' ? 'number' : 'text'" min="1" step="1" spellcheck="false" class="mono" :disabled="busy" /></label><button v-if="form.scheduleType === 'CRON'" class="cron-open" type="button" :disabled="busy" :aria-expanded="cronOpen" @click="toggleCron"><CalendarClock :size="16" /><span>{{ t('配置') }}</span></button></div>
-        <label>{{ t('调度过期策略') }}<UiSelect v-model="form.misfireStrategy" :options="misfireOptions" :aria-label="t('调度过期策略')" :disabled="busy" /></label>
+        <label v-if="adminVersion !== '2.2'">{{ t('调度过期策略') }}<UiSelect v-model="form.misfireStrategy" :options="misfireOptions" :aria-label="t('调度过期策略')" :disabled="busy" /></label>
+        <p v-else class="muted">{{ t('2.2.x 仅支持 Cron 调度') }} · {{ t('2.2.x 使用固定过期策略') }}</p>
       </div></section>
       <section class="job-section"><h3>{{ t('任务配置') }}</h3><div class="job-fields">
         <label>{{ t('运行模式') }}<input :value="form.glueType" readonly /></label>

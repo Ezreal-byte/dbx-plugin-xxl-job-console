@@ -211,7 +211,7 @@ func (s *session) jobsByGroup(id int) ([]any, error) {
 	if id < 1 || !s.permitGroup(id) {
 		return nil, errors.New("没有该执行器的权限，请选择已授权执行器")
 	}
-	if s.adminVersion != "2.3" {
+	if !legacyAdminAPI(s.adminVersion) {
 		result := []any{}
 		for offset := 0; offset < 10000; offset += 100 {
 			form := url.Values{"start": {strconv.Itoa(offset)}, "length": {"100"}, "jobGroup": {strconv.Itoa(id)}, "triggerStatus": {"-1"}, "jobDesc": {""}, "executorHandler": {""}, "author": {""}}
@@ -253,6 +253,11 @@ func (s *session) jobsByGroup(id int) ([]any, error) {
 		row, ok := v.(map[string]any)
 		if !ok || row["jobGroup"] != float64(id) {
 			return nil, errors.New("任务执行器归属不合法")
+		}
+		if s.adminVersion == "2.2" {
+			if err := normalize22Job(row); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return rows, nil

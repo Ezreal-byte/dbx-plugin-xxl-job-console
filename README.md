@@ -1,6 +1,6 @@
 # XXL-JOB Console for DBX
 
-DBX workbench for official XXL-JOB Admin. Provides separate `2.3.x`, `3.4.x` and `3.5.x` API profiles; choose the Admin version when creating a connection. These profiles were checked against official `2.3.0`, `3.4.2` and `3.5.0` source respectively. Other releases and customized distributions are not assumed compatible without testing.
+DBX workbench for official XXL-JOB Admin. Provides separate `2.2.x`, `2.3.x`, `3.4.x` and `3.5.x` API profiles; choose the Admin version when creating a connection. These profiles were checked against official `2.2.0`, `2.3.0`, `3.4.2` and `3.5.0` source respectively. Other releases and customized distributions are not assumed compatible without testing.
 
 This community plugin is published by **Ezreal-byte** (catalog publisher ID `ezreal-byte`) as `io.dbx.xxljob-console`. It does not require direct database access or modify the XXL-JOB server.
 
@@ -28,9 +28,13 @@ See [AI/MCP permissions and protocol](docs/AI_MCP.md), [0.4.0 release notes](REL
 
 Version `0.4.1` adds the explicit `3.5.x` profile, adapts executor/job names and fixes modern log snapshots. Executor updates preserve the latest access token in the backend and are rejected if its value cannot be determined safely. See [release notes](RELEASE_NOTES_0.4.1.md). Select `3.5.x` manually for Admin 3.5.0; new connections still default to `3.4.x`.
 
+## 0.4.2: Admin 2.2.0 compatibility
+
+Select **2.2.x** and set the context path to **/xxl-job-admin** for the official deployment. The adapter maps legacy `jobCron` to the shared job model and sends `cron` for server-side run-time previews. Workbench and AI/MCP use the same adapter and confirmation gates. Admin 2.2 only supports Cron scheduling and a fixed misfire policy: the editor hides unsupported choices, and the backend rejects `NONE`, `FIX_RATE` and `FIRE_ONCE_NOW` before issuing a preview. Normalized `DO_NOTHING` is a compatibility value, not a configurable 2.2 policy. See [0.4.2 release notes](RELEASE_NOTES_0.4.2.md) and [2.2.0 verification](docs/VERIFICATION_2.2.0.md).
+
 ## Connect
 
-Requires DBX `0.6.43` or newer, Host API `^1.4.0`. Enter the Admin IP/domain, port, username and password. New connections select `3.4.x` and `/` by default, matching the official 3.4.2 configuration. For stock `2.3.x`, select that version and change the application path to `/xxl-job-admin`. If the Admin is deployed at a custom path, enter that path instead. HTTPS and DBX SSH/proxy/HTTP tunnels are supported. HTTP transmits the login password in clear text: use it only on a trusted private network.
+Requires DBX `0.6.43` or newer, Host API `^1.4.0`. Enter the Admin IP/domain, port, username and password. New connections select `3.4.x` and `/` by default, matching the official 3.4.2 configuration. For stock `2.2.x` or `2.3.x`, select that version and change the application path to `/xxl-job-admin`. If the Admin is deployed at a custom path, enter that path instead. HTTPS and DBX SSH/proxy/HTTP tunnels are supported. HTTP transmits the login password in clear text: use it only on a trusted private network.
 
 The plugin authenticates to the selected Admin version and keeps the session cookie in memory. Redirects are never followed; expired sessions require reconnecting. Existing connections without a version selector retain the legacy `2.3.x` profile. For a new connection, the default is `3.4.x`.
 
@@ -42,7 +46,7 @@ The plugin authenticates to the selected Admin version and keeps the session coo
 
 For official Admin **3.5.0**, select the **3.5.x** profile and the deployed application path (normally `/`). The adapter maps executor `name` to the existing `title` field and job `name` to `jobDesc`, including filters, job options and create/update requests. It reuses the modern login, pagination, dashboard and log APIs. Updating an executor preserves its existing `accessToken` inside the backend; token configuration remains in the official Admin UI. Existing 2.3.x/3.4.x profiles and the default version are unchanged. See [3.5.0 compatibility verification](docs/VERIFICATION_3.5.0.md).
 
-The version profiles differ: `2.3.x` uses `/login`, legacy flat pagination and singular `id`; `3.4.x` and `3.5.x` use `/auth/doLogin`, `Response<PageModel>` and `ids[]` for some writes. The plugin never probes a write endpoint to infer a version. An unsupported version is rejected before login. Version selection is not a guarantee for forks or untested deployments.
+The version profiles differ: `2.2.x` and `2.3.x` use `/login`, legacy flat pagination and singular `id`; `3.4.x` and `3.5.x` use `/auth/doLogin`, `Response<PageModel>` and `ids[]` for some writes. The plugin never probes a write endpoint to infer a version. An unsupported version is rejected before login. Version selection is not a guarantee for forks or untested deployments.
 
 Admin `3.1.0` uses the legacy login and pagination contracts but requires the executor `appname` and `title` filters. Version `0.3.3` sends both as empty strings to keep the listing unfiltered; use the `2.3.x` profile for this deployment. This fixes executor listing, without claiming full verification of every Admin 3.1.0 operation. Official `3.2.0` requires the same filters but introduces XXL-SSO authentication; this query fix does not establish end-to-end 3.2.0 compatibility with either existing profile. See the upstream [3.1.0 controller](https://github.com/xuxueli/xxl-job/blob/3.1.0/xxl-job-admin/src/main/java/com/xxl/job/admin/controller/JobGroupController.java) and [3.2.0 SSO configuration](https://github.com/xuxueli/xxl-job/blob/3.2.0/xxl-job-admin/src/main/java/com/xxl/job/admin/web/xxlsso/XxlSsoConfig.java).
 
@@ -57,7 +61,7 @@ npm run build
 go -C backend test -race ./...
 go -C backend vet ./...
 npm run package:all
-go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.4.1-windows-x64.dbxp --handshake
+go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.4.2-windows-x64.dbxp --handshake
 ```
 
 `package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, a versioned `SHA256SUMS` file and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.

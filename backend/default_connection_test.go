@@ -96,6 +96,9 @@ func TestManifestDefaultsConnectToOfficialModernRoot(t *testing.T) {
 func TestVersionPathsAndCustomPath(t *testing.T) {
 	for _, tc := range []struct{ name, version, path, expected string }{
 		{"legacy fallback", "", "", "/xxl-job-admin/login"},
+		{"2.2 default", "2.2", "", "/xxl-job-admin/login"},
+		{"2.2 configured", "2.2", "/xxl-job-admin", "/xxl-job-admin/login"},
+		{"2.2 custom", "2.2", "/custom", "/custom/login"},
 		{"2.3 default", "2.3", "", "/xxl-job-admin/login"},
 		{"3.4 default", "3.4", "", "/auth/doLogin"},
 		{"3.5 default", "3.5", "", "/auth/doLogin"},
@@ -124,7 +127,7 @@ func TestVersionPathsAndCustomPath(t *testing.T) {
 					return
 				}
 				cookie := "XXL_SSO_TOKEN"
-				if tc.version == "" || tc.version == "2.3" {
+				if tc.version == "" || tc.version == "2.2" || tc.version == "2.3" {
 					cookie = "XXL_JOB_LOGIN_IDENTITY"
 				}
 				http.SetCookie(w, &http.Cookie{Name: cookie, Value: "fixture", Path: "/"})

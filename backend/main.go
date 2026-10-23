@@ -17,7 +17,7 @@ import (
 )
 
 const pluginID = "io.dbx.xxljob-console"
-const version = "0.4.1"
+const version = "0.4.2"
 
 type plugin struct {
 	lifecycle sync.Mutex
@@ -241,7 +241,7 @@ func (s *session) operation(method string, v params) (any, error) {
 		if !ok || !s.permitGroup(int(g)) {
 			return nil, errors.New("没有该日志所属执行器的权限")
 		}
-		if s.adminVersion == "2.3" {
+		if legacyAdminAPI(s.adminVersion) {
 			address, _ := row["executorAddress"].(string)
 			ms, e := logMillis(row["triggerTime"])
 			if e != nil {
@@ -456,6 +456,11 @@ func buildForm(method string, input map[string]any, version ...string) (url.Valu
 	if method == "xxljob/nextTriggerTime" {
 		if form.Get("scheduleType") != "CRON" || len(form.Get("scheduleConf")) == 0 || len(form.Get("scheduleConf")) > 128 {
 			return nil, errors.New("Cron 表达式无效")
+		}
+	}
+	if method == "xxljob/saveJob" && len(version) > 0 && version[0] == "2.2" {
+		if err := validate22Schedule(form); err != nil {
+			return nil, err
 		}
 	}
 	if method == "xxljob/users" {

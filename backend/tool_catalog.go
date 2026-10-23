@@ -34,6 +34,8 @@ func jobFields() schema {
 	props["jobGroup"] = numSchema(1, 2147483647)
 	props["scheduleType"] = choice("NONE", "CRON", "FIX_RATE")
 	props["misfireStrategy"] = choice("DO_NOTHING", "FIRE_ONCE_NOW")
+	props["scheduleType"].(schema)["description"] = "Admin 2.2.x 仅支持 CRON；其他版本可选择 NONE / CRON / FIX_RATE。"
+	props["misfireStrategy"].(schema)["description"] = "Admin 2.2.x 策略固定，只接受兼容值 DO_NOTHING；该值不会作为可配置策略发送。"
 	props["executorRouteStrategy"] = choice("FIRST", "LAST", "ROUND", "RANDOM", "CONSISTENT_HASH", "LEAST_FREQUENTLY_USED", "LEAST_RECENTLY_USED", "FAILOVER", "BUSYOVER", "SHARDING_BROADCAST")
 	props["executorBlockStrategy"] = choice("SERIAL_EXECUTION", "DISCARD_LATER", "COVER_EARLY")
 	props["executorTimeout"] = numSchema(0, 2147483647)

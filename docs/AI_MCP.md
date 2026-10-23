@@ -1,6 +1,6 @@
 # XXL-JOB AI / MCP 使用与权限
 
-适用版本：`0.4.0`，DBX ≥ `0.6.43`，Host API `^1.4.0`。
+适用版本：`0.4.0` 及后续 `0.4.x`，DBX ≥ `0.6.43`，Host API `^1.4.0`。
 
 ## 开启方式
 
@@ -98,3 +98,7 @@ DBX 隧道需要有效的宿主本地 runtime。MCP 没有 runtime 时，通过 
 | `xxljob/audit` | 当前连接调用记录 |
 
 保留原有 `xxljob/*` 方法名。任务/执行器写入现在除 `confirmed:true` 外还必须提供匹配的 `previewToken`；旧式直接写请求会明确拒绝。
+
+## Admin 2.2.x 兼容（0.4.2）
+
+连接选择 `2.2.x` 和实际部署路径（官方默认 `/xxl-job-admin`）。工具名称及参数保持一致：`scheduleType` 只能为 `CRON`；过期策略由 2.2 服务端固定处理，`misfireStrategy` 仅接受兼容显示值 `DO_NOTHING`。后端将 `scheduleConf` 转换成 `jobCron`，不支持的调度选项在生成预览前拒绝。按连接授权、预览与确认要求不变。

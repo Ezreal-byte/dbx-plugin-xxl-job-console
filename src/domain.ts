@@ -13,6 +13,7 @@ export type Page<T> = { recordsTotal: number; recordsFiltered: number; data: T[]
 export type Info = { name: string; baseUrl: string; environment: string; readOnly: boolean; isProduction?: boolean; authMode: 'password'; admin: boolean; username: string; adminVersion: string };
 export type JobDetail = { job: Job; revision: string; executor: Group; nodes: string[]; recentLogs: LogRow[]; partial: boolean; warning?: string };
 export const schedules = [['NONE', '无调度'], ['CRON', 'Cron'], ['FIX_RATE', '固定间隔']] as const;
+export const jobSchedules = (version?: string) => schedules.filter(([key]) => version !== '2.2' || key === 'CRON');
 export const misfires = [['DO_NOTHING', '忽略'], ['FIRE_ONCE_NOW', '立即执行一次']] as const;
 export const routes = [['FIRST', '第一个'], ['LAST', '最后一个'], ['ROUND', '轮询'], ['RANDOM', '随机'], ['CONSISTENT_HASH', '一致性 HASH'], ['LEAST_FREQUENTLY_USED', '最不经常使用'], ['LEAST_RECENTLY_USED', '最近最少使用'], ['FAILOVER', '故障转移'], ['BUSYOVER', '忙碌转移'], ['SHARDING_BROADCAST', '分片广播']] as const;
 export const blocks = [['SERIAL_EXECUTION', '单机串行'], ['DISCARD_LATER', '丢弃后续调度'], ['COVER_EARLY', '覆盖之前调度']] as const;
@@ -38,7 +39,9 @@ export function groupForm(group: Group): Form {
   return result;
 }
 const integer = (value: number, min = 0, max = 2147483647) => Number.isInteger(value) && value >= min && value <= max;
-export function validateJob(job: Job): string {
+export function validateJob(job: Job, version?: string): string {
+  if (version === '2.2' && job.scheduleType !== 'CRON') return '2.2.x 仅支持 Cron 调度';
+  if (version === '2.2' && job.misfireStrategy !== 'DO_NOTHING') return '2.2.x 使用固定过期策略';
   if (!integer(job.jobGroup, 1)) return '请选择执行器';
   if (!job.jobDesc?.trim()) return '任务描述不能为空';
   if (!schedules.some(([key]) => key === job.scheduleType)) return '调度类型无效';

@@ -38,7 +38,7 @@ func parseOverview(raw []byte) (map[string]int, error) {
 
 func (s *session) overview() (map[string]int, error) {
 	path := "/"
-	if s.adminVersion != "2.3" {
+	if !legacyAdminAPI(s.adminVersion) {
 		path = "/dashboard"
 	}
 	raw, err := s.raw("GET", path, nil, false)
