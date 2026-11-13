@@ -17,7 +17,7 @@ import (
 )
 
 const pluginID = "io.dbx.xxljob-console"
-const version = "0.4.2"
+const version = "0.4.3"
 
 type plugin struct {
 	lifecycle sync.Mutex
