@@ -26,6 +26,8 @@ const entries: Record<string, [string, string, string, string, string, string, s
   '累计调度': ['Total triggers','累計調度','累計実行','누적 실행','Ejecuciones totales','Esecuzioni totali','Execuções totais'],
   '执行器分组': ['Executor groups','執行器群組','実行先グループ','실행기 그룹','Grupos de ejecutores','Gruppi esecutori','Grupos de executores'],
   'Cron 字段': ['Cron fields','Cron 欄位','Cron フィールド','Cron 필드','Campos Cron','Campi Cron','Campos Cron'],
+  '搜索选项': ['Search options','搜尋選項','オプションを検索','옵션 검색','Buscar opciones','Cerca opzioni','Pesquisar opções'],
+  '无匹配项': ['No matching options','無符合項目','一致する項目なし','일치하는 항목 없음','Sin coincidencias','Nessuna corrispondenza','Nenhuma opção correspondente'],
   '日': ['Day','日','日','일','Día','Giorno','Dia'],
   '月': ['Month','月','月','월','Mes','Mese','Mês'],
   '周': ['Week','週','週','주','Semana','Settimana','Semana'],

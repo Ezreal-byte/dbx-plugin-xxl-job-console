@@ -32,9 +32,11 @@ Version `0.4.1` adds the explicit `3.5.x` profile, adapts executor/job names and
 
 Select **2.2.x** and set the context path to **/xxl-job-admin** for the official deployment. The adapter maps legacy `jobCron` to the shared job model and sends `cron` for server-side run-time previews. Workbench and AI/MCP use the same adapter and confirmation gates. Admin 2.2 only supports Cron scheduling and a fixed misfire policy: the editor hides unsupported choices, and the backend rejects `NONE`, `FIX_RATE` and `FIRE_ONCE_NOW` before issuing a preview. Normalized `DO_NOTHING` is a compatibility value, not a configurable 2.2 policy. See [0.4.2 release notes](RELEASE_NOTES_0.4.2.md) and [2.2.0 verification](docs/VERIFICATION_2.2.0.md).
 
-## 0.4.3: MCP tool access declarations
+## 0.4.3: MCP tool access declarations and executor search
 
 Version `0.4.3` adds the required `tools` / `toolsets` access declarations to the MCP contribution in `manifest.json`. Newer DBX hosts hide every external tool that lacks an author-declared `access` level (`read` / `write` / `full`). See [0.4.3 release notes](RELEASE_NOTES_0.4.3.md) and [issue #7](https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console/issues/7).
+
+Executor dropdowns are now searchable by name or AppName, including the job/log filter and the new-job editor. Search supports keyboard navigation, and a new job inherits the executor currently selected in job management. This keeps large installations (1000+ executors) usable without scrolling through the full list. See [issue #8](https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console/issues/8).
 
 ## Connect
 

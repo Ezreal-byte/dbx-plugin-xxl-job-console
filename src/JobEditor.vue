@@ -11,7 +11,7 @@ const emit = defineEmits<{ save: [job: Job]; close: [] }>();
 const original = JSON.stringify(props.job);
 const form = ref<Job>({ ...props.job });
 const error = ref(''), cronOpen = ref(false), cronStyle = ref<Record<string, string>>({});
-const groupOptions = computed(() => [{ value: 0, label: t('选择执行器'), disabled: true }, ...(props.job.id && !props.groups.some(g => g.id === form.value.jobGroup) ? [{ value: form.value.jobGroup, label: `#${form.value.jobGroup}` }] : []), ...props.groups.map(g => ({ value: g.id ?? 0, label: `${g.title} · ${g.appname}` }))]);
+const groupOptions = computed(() => [{ value: 0, label: t('选择执行器'), disabled: true }, ...(props.job.id && !props.groups.some(g => g.id === form.value.jobGroup) ? [{ value: form.value.jobGroup, label: `#${form.value.jobGroup}` }] : []), ...props.groups.map(g => ({ value: g.id ?? 0, label: `${g.title} · ${g.appname}`, keywords: `${g.title} ${g.appname}` }))]);
 const scheduleOptions = computed(() => jobSchedules(props.adminVersion).map(([value, label]) => ({ value, label: t(label) })));
 const misfireOptions = computed(() => misfires.map(([value, label]) => ({ value, label: t(label) })));
 const routeOptions = computed(() => routes.map(([value, label]) => ({ value, label: t(label) })));
@@ -38,7 +38,7 @@ function save() {
     <div class="editor-form"><div class="form-body job-form">
       <p v-if="error || serverError" class="error" role="alert">{{ error || serverError }}</p>
       <section class="job-section"><h3>{{ t('基础配置') }}</h3><div class="job-fields">
-        <label class="required">{{ t('执行器') }}<UiSelect v-model="form.jobGroup" :options="groupOptions" :aria-label="t('执行器')" :disabled="busy" /></label>
+        <label class="required">{{ t('执行器') }}<UiSelect v-model="form.jobGroup" :options="groupOptions" :aria-label="t('执行器')" searchable :disabled="busy" /></label>
         <label class="required">{{ t('任务描述') }}<input v-model="form.jobDesc" required maxlength="255" :disabled="busy" :placeholder="t('任务描述')" /></label>
         <label class="required">{{ t('负责人') }}<input v-model="form.author" required :disabled="busy" :placeholder="t('负责人')" /></label>
         <label>{{ t('报警邮箱') }}<input v-model="form.alarmEmail" type="text" :disabled="busy" :placeholder="t('报警邮箱')" /></label>

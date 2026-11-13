@@ -50,7 +50,7 @@ function setPeriod(value: Period) {
 const freshFilters = () => ({ jobGroup: -1, jobDesc: '', executorHandler: '', author: '', triggerStatus: -1, jobId: '', logStatus: -1, from: '', to: '', groupSearch: '', username: '', userRole: -1, reportStart: dateBefore(6), reportEnd: dateBefore(0) });
 const filters = ref(freshFilters());
 const filteredGroups = computed(() => groups.value.filter(g => `${g.appname} ${g.title} ${g.addressList}`.toLowerCase().includes(filters.value.groupSearch.toLowerCase())));
-const groupFilterOptions = computed(() => [...(info.value?.admin ? [{ value: -1, label: t('全部执行器') }] : []), ...groups.value.map(g => ({ value: g.id ?? 0, label: g.title }))]);
+const groupFilterOptions = computed(() => [...(info.value?.admin ? [{ value: -1, label: t('全部执行器') }] : []), ...groups.value.map(g => ({ value: g.id ?? 0, label: g.title, keywords: `${g.title} ${g.appname}` }))]);
 const jobStatusOptions = computed(() => [{ value: -1, label: t('全部状态') }, { value: 1, label: t('调度已启用') }, { value: 0, label: t('调度已停止') }]);
 const logStatusOptions = computed(() => [{ value: -1, label: t('全部状态') }, { value: 1, label: t('执行成功') }, { value: 2, label: t('执行失败') }, { value: 3, label: t('执行中') }]);
 const jobFilterOptions = computed(() => [{ value: '', label: t(optionsBusy.value ? '任务加载中' : '全部任务') }, ...taskOptions.value.map(job => ({ value: String(job.id), label: `#${job.id} · ${job.jobDesc}` }))]);
@@ -182,7 +182,7 @@ function movePage(delta: number) { page.value += delta; if (view.value !== 'grou
 async function freshJob(job: Job) { return invoke<JobDetail>(connectionId.value, 'xxljob/jobDetails', { form: { id: job.id, jobGroup: job.jobGroup } }); }
 async function editJob(job?: Job) {
   if (!canWrite.value) return; const current = epoch; executionLoading.value = true;
-  try { const data = job ? await freshJob(job) : undefined; if (current !== epoch) return; editorRevision.value = data?.revision || ''; jobEditor.value = data ? { ...data.job } : newJob(groups.value[0]?.id || 0); void focusDialog(); }
+  try { const data = job ? await freshJob(job) : undefined; if (current !== epoch) return; editorRevision.value = data?.revision || ''; const preferredGroup = filters.value.jobGroup > 0 ? filters.value.jobGroup : groups.value[0]?.id || 0; jobEditor.value = data ? { ...data.job } : newJob(preferredGroup); void focusDialog(); }
   catch (e) { if (current === epoch) showToast('error', t('无法读取任务配置'), message(e)); }
   finally { if (current === epoch) executionLoading.value = false; }
 }
@@ -315,7 +315,7 @@ onBeforeUnmount(() => { void window.dbxPlugin?.ai?.clearRecommendations().catch(
       <template v-else>
         <div class="filters" @keydown.enter="searchOnEnter">
           <template v-if="view === 'report'"><div class="period-switch" role="radiogroup" :aria-label="t('报表区间')"><label v-for="choice in periods" :key="choice.key" :class="{ active: period === choice.key }"><input v-model="period" type="radio" :value="choice.key" @change="setPeriod(choice.key)" />{{ t(choice.label) }}</label></div><div v-if="period === 'custom'" class="custom-range"><label>{{ t('开始日期') }}<input v-model="filters.reportStart" type="date" /></label><span>—</span><label>{{ t('结束日期') }}<input v-model="filters.reportEnd" type="date" /></label></div></template>
-          <template v-if="view === 'jobs' || view === 'logs'"><UiSelect v-model="filters.jobGroup" :options="groupFilterOptions" :aria-label="t('筛选执行器')" :disabled="loading || working || optionsBusy || authExpired" @change="changeGroup" /></template>
+          <template v-if="view === 'jobs' || view === 'logs'"><UiSelect v-model="filters.jobGroup" :options="groupFilterOptions" :aria-label="t('筛选执行器')" searchable :disabled="loading || working || optionsBusy || authExpired" @change="changeGroup" /></template>
           <template v-if="view === 'jobs'"><UiSelect v-model="filters.triggerStatus" :options="jobStatusOptions" :aria-label="t('任务状态筛选')" :disabled="loading || working || authExpired" @change="search" /><input v-model="filters.jobDesc" :aria-label="t('任务描述筛选')" :placeholder="t('任务描述')" /><input v-model="filters.executorHandler" aria-label="Handler" placeholder="Handler" /><input v-model="filters.author" :aria-label="t('负责人筛选')" :placeholder="t('负责人')" /></template>
           <template v-if="view === 'groups'"><input v-model="filters.groupSearch" :aria-label="t('查询执行器')" :placeholder="t('名称、AppName 或地址')" /></template>
           <template v-if="view === 'logs'"><UiSelect v-model="filters.jobId" :options="jobFilterOptions" :aria-label="t('筛选具体任务')" :disabled="loading || working || optionsBusy || filters.jobGroup < 1 || authExpired" @change="search" /><UiSelect v-model="filters.logStatus" :options="logStatusOptions" :aria-label="t('日志状态')" :disabled="loading || working || optionsBusy || authExpired" @change="search" /></template>
