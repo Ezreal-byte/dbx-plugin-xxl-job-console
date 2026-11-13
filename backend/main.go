@@ -17,7 +17,7 @@ import (
 )
 
 const pluginID = "io.dbx.xxljob-console"
-const version = "0.4.3"
+const version = "0.4.4"
 
 type plugin struct {
 	lifecycle sync.Mutex
@@ -46,12 +46,8 @@ func (p *plugin) Handle(_ sdk.RequestContext, method string, raw json.RawMessage
 	if method == "mcp/call" {
 		return p.mcpCall(raw), nil
 	}
-	if method == "mcp/tools" || strings.HasPrefix(method, "mcp/settings/") {
-		value, err := p.automationRPC(method, raw)
-		if err != nil {
-			return nil, sdk.NewError(-32000, err.Error())
-		}
-		return value, nil
+	if method == "mcp/tools" {
+		return mcpTools(), nil
 	}
 	var v params
 	if json.Unmarshal(raw, &v) != nil {
@@ -131,9 +127,6 @@ func (p *plugin) handle(method string, v params) (any, error) {
 	defer cancel()
 	s.opContext = ctx
 	defer func() { s.opContext = nil }()
-	if method == "xxljob/audit" {
-		return p.auditList(v.ConnectionID)
-	}
 	if method == "xxljob/preview" {
 		return p.uiPreview(s, v.Form)
 	}

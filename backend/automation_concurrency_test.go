@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func TestPolicyProcessWorker(t *testing.T) {
+func TestStateProcessWorker(t *testing.T) {
 	dir := os.Getenv("XXL_TEST_STATE_DIR")
 	if dir == "" {
 		return
@@ -22,9 +22,7 @@ func TestPolicyProcessWorker(t *testing.T) {
 	p := &plugin{dataDir: dir}
 	for i := 0; i < 20; i++ {
 		if e := p.lockedState(true, func(s *automationState) error {
-			v := s.Policies["counter"]
-			v.Revision++
-			s.Policies["counter"] = v
+			s.Audit = append(s.Audit, auditRecord{Outcome: "worker"})
 			return nil
 		}); e != nil {
 			t.Fatal(e)
@@ -32,7 +30,7 @@ func TestPolicyProcessWorker(t *testing.T) {
 	}
 }
 
-func TestPolicyCrossProcessAtomicWrites(t *testing.T) {
+func TestStateCrossProcessAtomicWrites(t *testing.T) {
 	dir := t.TempDir()
 	executable, e := os.Executable()
 	if e != nil {
@@ -40,7 +38,7 @@ func TestPolicyCrossProcessAtomicWrites(t *testing.T) {
 	}
 	commands := []*exec.Cmd{}
 	for i := 0; i < 3; i++ {
-		cmd := exec.Command(executable, "-test.run=^TestPolicyProcessWorker$")
+		cmd := exec.Command(executable, "-test.run=^TestStateProcessWorker$")
 		cmd.Env = append(os.Environ(), "XXL_TEST_STATE_DIR="+dir)
 		if e := cmd.Start(); e != nil {
 			t.Fatal(e)
@@ -54,8 +52,8 @@ func TestPolicyCrossProcessAtomicWrites(t *testing.T) {
 	}
 	p := &plugin{dataDir: dir}
 	if e := p.lockedState(false, func(s *automationState) error {
-		if s.Policies["counter"].Revision != 60 {
-			t.Errorf("lost updates: %+v", s.Policies)
+		if len(s.Audit) != 60 {
+			t.Errorf("lost updates: %d audit records", len(s.Audit))
 		}
 		return nil
 	}); e != nil {
@@ -65,7 +63,7 @@ func TestPolicyCrossProcessAtomicWrites(t *testing.T) {
 
 func TestConcurrentSidecarsConsumeTokenOnce(t *testing.T) {
 	p, c, state := fixturePlugin(t, false)
-	grant(t, p, c, "trigger_job")
+	connectFixture(t, p, c)
 	args := map[string]any{"job_id": 7, "executor_id": 1, "parameter_mode": "saved"}
 	args["preview_token"] = previewTool(t, p, c, "trigger_job", args)
 	other := &plugin{dataDir: p.dataDir, sessions: map[string]*session{}}
@@ -91,23 +89,6 @@ func TestConcurrentSidecarsConsumeTokenOnce(t *testing.T) {
 	defer state.mu.Unlock()
 	if len(state.writes) != 1 {
 		t.Fatalf("replayed write: %v", state.writes)
-	}
-}
-
-func TestRevocationWorksAfterReadOnlyOrLoginExpiry(t *testing.T) {
-	p, c, _ := fixturePlugin(t, false)
-	grant(t, p, c, "trigger_job")
-	s := p.sessions[c.ID]
-	s.mu.Lock()
-	s.readOnly = true
-	s.expired = true
-	s.mu.Unlock()
-	_, e := p.automationRPC("mcp/settings/set", jsonBytes(map[string]any{"connectionId": c.ID, "enabled": false, "revision": 2, "allowedTools": []string{"trigger_job"}}))
-	if e != nil {
-		t.Fatal(e)
-	}
-	if p.policyAllows(c.ID, "trigger_job") == nil {
-		t.Fatal("revocation ignored")
 	}
 }
 
@@ -235,7 +216,7 @@ func TestDesktopBridgeWriteLossIsUnknownAndNotRetried(t *testing.T) {
 
 func TestDiagnosticSampleAndHostProviderBinding(t *testing.T) {
 	p, c, _ := fixturePlugin(t, false)
-	grant(t, p, c)
+	connectFixture(t, p, c)
 	r := resultObject(t, mcp(p, c, "get_job_diagnostics", map[string]any{"job_id": 7, "executor_id": 1}))
 	d := r["diagnostics"].(map[string]any)
 	if d["windowHours"] != float64(24) || len(d["recentFailures"].([]any)) != 1 || d["logBodiesIncluded"] != false {

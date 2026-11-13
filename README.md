@@ -16,11 +16,11 @@ Version `0.3.3` fixes missing required executor filters on Admin 3.1.0, updates 
 
 ## 0.4.0: built-in AI and external MCP
 
-Version `0.4.0` adds **22 named tools** through DBX's existing Agent and MCP server. The **AI/MCP** panel controls access per connection, defaults to off, and re-enables with query tools only. Models remain configured in DBX. Writes from both the workbench and tools require a backend-generated, expiring preview; plugin permission cannot override DBX read-only policy or Admin account permissions.
+Version `0.4.0` adds **22 named tools** through DBX's existing Agent and MCP server. Models remain configured in DBX. Writes from both the workbench and tools require a backend-generated, expiring preview; tool access cannot override DBX read-only policy or Admin account permissions.
 
 The workbench adds fresh task details, scoped AI questions, call history, explicit saved/override run parameters, conflict checks and bounded logs. No GLUE source editing, arbitrary HTTP/RPC forwarding or account/password tools are exposed to AI.
 
-Enable the plugin tools in DBX and the **AI/MCP** panel for the intended connection. Built-in AI requires **Agent** mode; external MCP also requires that connection in DBX's MCP allowlist. An independent preview profile must be selected through `DBX_DATA_DIR` by both the desktop and MCP process.
+Enable the plugin tools in DBX and choose the intended connection, access ceiling and tools in DBX's MCP settings. Built-in AI requires **Agent** mode; external MCP also requires that connection in DBX's MCP connection scope. An independent preview profile must be selected through `DBX_DATA_DIR` by both the desktop and MCP process.
 
 See [AI/MCP permissions and protocol](docs/AI_MCP.md), [0.4.0 release notes](RELEASE_NOTES_0.4.0.md), and [verification report](docs/VERIFICATION_0.4.0.md). GitHub Release assets are unsigned review candidates; DBX Store review and signing are separate.
 
@@ -38,9 +38,15 @@ Version `0.4.3` adds the required `tools` / `toolsets` access declarations to th
 
 Executor dropdowns are now searchable by name or AppName, including the job/log filter and the new-job editor. Search supports keyboard navigation, and a new job inherits the executor currently selected in job management. This keeps large installations (1000+ executors) usable without scrolling through the full list. See [issue #8](https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console/issues/8).
 
+## 0.4.4: MCP configuration owned by DBX
+
+Version `0.4.4` removes the plugin's duplicate **AI/MCP** enable switch and per-connection tool allowlist. DBX is now the single place to authorize plugin tools: use **Plugin Center** for built-in AI and **Settings → MCP → Capabilities** for the external MCP server. The manifest remains the author declaration for all 22 tools and five toolsets, while `mcp/tools` always returns the complete tool catalog for host-side filtering. This relies on DBX's zero-config plugin MCP grants and raises the minimum host version to `0.6.60`.
+
+The plugin still owns execution safety: writes require a five-minute, one-use preview token bound to the connection, operation and arguments; connection identity, read-only state and target snapshots are rechecked before execution. Existing `automation.json` policy fields are ignored safely, and call audit records remain available through `list_calls`.
+
 ## Connect
 
-Requires DBX `0.6.43` or newer, Host API `^1.4.0`. Enter the Admin IP/domain, port, username and password. New connections select `3.4.x` and `/` by default, matching the official 3.4.2 configuration. For stock `2.2.x` or `2.3.x`, select that version and change the application path to `/xxl-job-admin`. If the Admin is deployed at a custom path, enter that path instead. HTTPS and DBX SSH/proxy/HTTP tunnels are supported. HTTP transmits the login password in clear text: use it only on a trusted private network.
+Requires DBX `0.6.60` or newer, Host API `^1.4.0`. Enter the Admin IP/domain, port, username and password. New connections select `3.4.x` and `/` by default, matching the official 3.4.2 configuration. For stock `2.2.x` or `2.3.x`, select that version and change the application path to `/xxl-job-admin`. If the Admin is deployed at a custom path, enter that path instead. HTTPS and DBX SSH/proxy/HTTP tunnels are supported. HTTP transmits the login password in clear text: use it only on a trusted private network.
 
 The plugin authenticates to the selected Admin version and keeps the session cookie in memory. Redirects are never followed; expired sessions require reconnecting. Existing connections without a version selector retain the legacy `2.3.x` profile. For a new connection, the default is `3.4.x`.
 
@@ -67,7 +73,7 @@ npm run build
 go -C backend test -race ./...
 go -C backend vet ./...
 npm run package:all
-go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.4.3-windows-x64.dbxp --handshake
+go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.4.4-windows-x64.dbxp --handshake
 ```
 
 `package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, a versioned `SHA256SUMS` file and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.

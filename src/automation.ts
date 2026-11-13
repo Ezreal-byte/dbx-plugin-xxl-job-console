@@ -1,10 +1,6 @@
 import { invoke, type AiContext } from './bridge';
 import { t } from './i18n';
 
-export type Tool = { name: string; description: string; group: 'query' | 'schedule' | 'jobs' | 'delete' | 'executors' };
-export type Policy = { enabled: boolean; allowedTools: string[]; revision: number };
-export type Settings = { connectionId: string; policy: Policy; tools: Tool[]; warning?: string };
-export type Audit = { time: string; tool: string; resourceId?: string; durationMs: number; outcome: string };
 export type Preview = { previewToken: string; expiresAt: string; target: string; isProduction: boolean; executed: false; changes: { key: string; before: unknown; after: unknown }[]; warnings: string[] };
 export function previewOperation(connectionId: string, operation: string, args: Record<string, unknown>) {
   return invoke<Preview>(connectionId, 'xxljob/preview', { form: { operation, arguments: args } });

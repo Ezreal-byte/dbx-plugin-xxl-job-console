@@ -256,23 +256,6 @@ func connectFixture(t *testing.T, p *plugin, c connection) {
 		t.Fatal(e)
 	}
 }
-func grant(t *testing.T, p *plugin, c connection, names ...string) {
-	t.Helper()
-	connectFixture(t, p, c)
-	v, e := p.settingsGet(c.ID)
-	if e != nil {
-		t.Fatal(e)
-	}
-	revision := v.(map[string]any)["policy"].(policy).Revision
-	if _, e = p.automationRPC("mcp/settings/set", jsonBytes(map[string]any{"connectionId": c.ID, "enabled": true, "revision": revision})); e != nil {
-		t.Fatal(e)
-	}
-	if names != nil {
-		if _, e = p.automationRPC("mcp/settings/set", jsonBytes(map[string]any{"connectionId": c.ID, "enabled": true, "revision": revision + 1, "allowedTools": names})); e != nil {
-			t.Fatal(e)
-		}
-	}
-}
 func mcp(p *plugin, c connection, name string, args map[string]any) toolResult {
 	return p.mcpCall(jsonBytes(map[string]any{"tool": name, "arguments": args, "lifecycle": map[string]any{"connection": c, "connectionId": c.ID}}))
 }
@@ -292,19 +275,17 @@ func previewTool(t *testing.T, p *plugin, c connection, name string, args map[st
 	return resultObject(t, mcp(p, c, name, args))["previewToken"].(string)
 }
 
-func TestAutomationDiscoveryAndDefaultDeny(t *testing.T) {
-	p, c, state := fixturePlugin(t, false)
-	value, e := p.automationRPC("mcp/tools", jsonBytes(map[string]any{}))
-	if e != nil || len(value.(map[string]any)["tools"].([]toolDefinition)) != 0 {
-		t.Fatal(value, e)
+func TestMCPDiscoveryIsZeroConfig(t *testing.T) {
+	value, e := call(newPlugin(), "mcp/tools", map[string]any{})
+	if e != nil {
+		t.Fatal(e)
 	}
-	if !mcp(p, c, "list_jobs", nil).IsError {
-		t.Fatal("default allowed")
+	tools := value.(map[string]any)["tools"].([]toolDefinition)
+	if len(tools) != len(toolCatalog()) {
+		t.Fatalf("discovered %d tools, want %d", len(tools), len(toolCatalog()))
 	}
-	if state.loginCount() != 0 {
-		t.Fatal("discovery/denial dialed server")
-	}
-	grant(t, p, c)
+	p, c, _ := fixturePlugin(t, false)
+	connectFixture(t, p, c)
 	result := resultObject(t, mcp(p, c, "list_jobs", nil))
 	if strings.Contains(string(jsonBytes(result)), "secret-value") {
 		t.Fatal("job parameters leaked")
@@ -313,47 +294,46 @@ func TestAutomationDiscoveryAndDefaultDeny(t *testing.T) {
 	if !mcp(p, c, "list_jobs", args).IsError {
 		t.Fatal("endpoint override accepted")
 	}
-	if !mcp(p, c, "start_job", map[string]any{"job_id": 7, "executor_id": 1}).IsError {
-		t.Fatal("query grant allowed write")
-	}
 }
-func TestAutomationPolicyIsolationCorruptionAndRevision(t *testing.T) {
+func TestCorruptAutomationStoreDoesNotBlockQueries(t *testing.T) {
 	p, c, _ := fixturePlugin(t, false)
-	grant(t, p, c, "start_job")
-	other := c
-	other.ID = "other"
-	if !mcp(p, other, "start_job", map[string]any{"job_id": 7, "executor_id": 1}).IsError {
-		t.Fatal("policy crossed connections")
-	}
-	if _, e := p.automationRPC("mcp/settings/set", jsonBytes(map[string]any{"connectionId": c.ID, "enabled": true, "revision": 0})); e == nil {
-		t.Fatal("stale policy revision accepted")
-	}
-	for _, enabled := range []bool{false, true} {
-		v, _ := p.settingsGet(c.ID)
-		rev := v.(map[string]any)["policy"].(policy).Revision
-		if _, e := p.automationRPC("mcp/settings/set", jsonBytes(map[string]any{"connectionId": c.ID, "enabled": enabled, "revision": rev, "allowedTools": []string{"start_job"}})); e != nil {
-			t.Fatal(e)
-		}
-	}
-	if p.policyAllows(c.ID, "start_job") == nil || p.policyAllows(c.ID, "list_jobs") != nil {
-		t.Fatal("re-enable did not reset to queries")
-	}
+	connectFixture(t, p, c)
 	if e := os.WriteFile(filepath.Join(p.dataDir, "automation.json"), []byte("broken"), 0600); e != nil {
 		t.Fatal(e)
 	}
-	if !mcp(p, c, "list_jobs", nil).IsError {
-		t.Fatal("corrupt settings allowed")
+	resultObject(t, mcp(p, c, "list_jobs", nil))
+	if !mcp(p, c, "start_job", map[string]any{"job_id": 7, "executor_id": 1}).IsError {
+		t.Fatal("corrupt preview state allowed a write preview")
 	}
-	value, _ := p.settingsGet(c.ID)
-	if value.(map[string]any)["warning"] == nil {
-		t.Fatal("no corruption warning")
+}
+func TestLegacyPluginPolicyIsIgnored(t *testing.T) {
+	p, c, _ := fixturePlugin(t, false)
+	connectFixture(t, p, c)
+	legacy := jsonBytes(map[string]any{
+		"version": 1,
+		"policies": map[string]any{
+			c.ID: map[string]any{"enabled": false, "allowedTools": []string{}, "revision": 7},
+		},
+		"previews": map[string]any{},
+		"audit":    []any{},
+	})
+	if e := os.WriteFile(filepath.Join(p.dataDir, "automation.json"), legacy, 0600); e != nil {
+		t.Fatal(e)
+	}
+	previewTool(t, p, c, "start_job", map[string]any{"job_id": 7, "executor_id": 1})
+	data, e := os.ReadFile(filepath.Join(p.dataDir, "automation.json"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if strings.Contains(string(data), `"policies"`) {
+		t.Fatal("legacy plugin policy was retained")
 	}
 }
 func TestPreviewExecuteBothAdminProfiles(t *testing.T) {
 	for _, version := range []string{"2.2", "2.3", "3.4", "3.5"} {
 		t.Run(version, func(t *testing.T) {
 			p, c, state := fixturePluginVersion(t, version)
-			grant(t, p, c, "start_job", "stop_job", "trigger_job", "update_job", "copy_job", "delete_job", "update_executor", "list_executors", "get_executor")
+			connectFixture(t, p, c)
 			assertNoToken := func(value any) {
 				t.Helper()
 				encoded := string(jsonBytes(value))
@@ -425,10 +405,10 @@ func TestPreviewExecuteBothAdminProfiles(t *testing.T) {
 	}
 }
 func TestPreviewBindingExpiryChangesAndReadonly(t *testing.T) {
-	for _, scenario := range []string{"arguments", "connection", "expiry", "target", "readonly", "revoked", "credentials"} {
+	for _, scenario := range []string{"arguments", "connection", "expiry", "target", "readonly", "credentials"} {
 		t.Run(scenario, func(t *testing.T) {
 			p, c, state := fixturePlugin(t, false)
-			grant(t, p, c, "start_job")
+			connectFixture(t, p, c)
 			args := map[string]any{"job_id": 7, "executor_id": 1}
 			key := previewTool(t, p, c, "start_job", args)
 			switch scenario {
@@ -437,7 +417,7 @@ func TestPreviewBindingExpiryChangesAndReadonly(t *testing.T) {
 			case "connection":
 				other := c
 				other.ID = "other"
-				grant(t, p, other, "start_job")
+				connectFixture(t, p, other)
 				c = other
 			case "expiry":
 				_ = p.lockedState(true, func(s *automationState) error {
@@ -454,13 +434,6 @@ func TestPreviewBindingExpiryChangesAndReadonly(t *testing.T) {
 				c.ReadOnly = true
 			case "credentials":
 				c.Password = "changed"
-			case "revoked":
-				_ = p.lockedState(true, func(s *automationState) error {
-					v := s.Policies[c.ID]
-					v.Enabled = false
-					s.Policies[c.ID] = v
-					return nil
-				})
 			}
 			args["preview_token"] = key
 			if !mcp(p, c, "start_job", args).IsError || len(state.recordedWrites()) != 0 {
@@ -512,7 +485,7 @@ func testPublicUIRequiresBoundPreview(t *testing.T, version string) {
 }
 func TestColdMCPReadsLogsWithoutPriorList(t *testing.T) {
 	p, c, _ := fixturePlugin(t, false)
-	grant(t, p, c)
+	connectFixture(t, p, c)
 	p.mu.Lock()
 	old := p.sessions[c.ID]
 	delete(p.sessions, c.ID)
@@ -530,7 +503,7 @@ func TestColdMCPReadsLogsWithoutPriorList(t *testing.T) {
 }
 func TestExecutorReferencesAndTriggerAddresses(t *testing.T) {
 	p, c, state := fixturePlugin(t, false)
-	grant(t, p, c, "delete_executor", "trigger_job")
+	connectFixture(t, p, c)
 	if !mcp(p, c, "delete_executor", map[string]any{"executor_id": 1}).IsError {
 		t.Fatal("in-use executor deletion allowed")
 	}
@@ -543,7 +516,7 @@ func TestExecutorReferencesAndTriggerAddresses(t *testing.T) {
 }
 func TestAmbiguousWriteIsNotRetried(t *testing.T) {
 	p, c, state := fixturePlugin(t, false)
-	grant(t, p, c, "trigger_job")
+	connectFixture(t, p, c)
 	args := map[string]any{"job_id": 7, "executor_id": 1, "parameter_mode": "saved"}
 	args["preview_token"] = previewTool(t, p, c, "trigger_job", args)
 	state.mu.Lock()
@@ -560,7 +533,7 @@ func TestAmbiguousWriteIsNotRetried(t *testing.T) {
 func TestNonAdminCannotReadGlobalOrForeignData(t *testing.T) {
 	p, c, state := fixturePlugin(t, false)
 	c.Username = "operator"
-	grant(t, p, c)
+	connectFixture(t, p, c)
 	for name, args := range map[string]map[string]any{"get_overview": {}, "list_jobs": {"executor_id": 2}, "get_job": {"executor_id": 2, "job_id": 7}, "get_log": {"executor_id": 2, "job_id": 7, "log_id": 11}} {
 		if !mcp(p, c, name, args).IsError {
 			t.Fatalf("unauthorized %s", name)
@@ -573,7 +546,7 @@ func TestNonAdminCannotReadGlobalOrForeignData(t *testing.T) {
 }
 func TestTunnelDoesNotUseOriginalTarget(t *testing.T) {
 	p, c, state := fixturePlugin(t, false)
-	grant(t, p, c)
+	connectFixture(t, p, c)
 	p.mu.Lock()
 	old := p.sessions[c.ID]
 	delete(p.sessions, c.ID)

@@ -154,16 +154,35 @@ func handshake(binary []byte, version string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, executable)
-	cmd.Stdin = strings.NewReader("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"plugin/initialize\",\"params\":{\"host\":{\"protocolVersions\":[1]}}}\n")
+	cmd.Stdin = strings.NewReader(strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"plugin/initialize","params":{"host":{"protocolVersions":[1]}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"mcp/tools","params":{}}`,
+	}, "\n") + "\n")
 	output, err := cmd.Output()
 	must(err)
-	var reply struct {
+	var initReply struct {
 		Result struct {
 			ProtocolVersion int
 			Plugin          struct{ ID, Version string }
 		}
 	}
-	must(json.Unmarshal(bytes.TrimSpace(output), &reply))
-	require(reply.Result.ProtocolVersion == 1 && reply.Result.Plugin.ID == "io.dbx.xxljob-console" && reply.Result.Plugin.Version == version, "package handshake mismatch")
-	fmt.Println("PASS packaged binary: plugin/initialize identity, version and protocol 1")
+	var toolsReply struct {
+		Result struct {
+			Tools []struct {
+				Name string
+			}
+		}
+	}
+	lines := bytes.Split(bytes.TrimSpace(output), []byte("\n"))
+	require(len(lines) == 2, "package handshake did not return exactly two replies")
+	must(json.Unmarshal(lines[0], &initReply))
+	must(json.Unmarshal(lines[1], &toolsReply))
+	require(initReply.Result.ProtocolVersion == 1 && initReply.Result.Plugin.ID == "io.dbx.xxljob-console" && initReply.Result.Plugin.Version == version, "package handshake mismatch")
+	require(len(toolsReply.Result.Tools) == 22, "packaged mcp/tools catalog does not contain 22 tools")
+	names := map[string]bool{}
+	for _, tool := range toolsReply.Result.Tools {
+		names[tool.Name] = true
+	}
+	require(names["connection_info"] && names["delete_job"] && names["delete_executor"], "packaged mcp/tools catalog is incomplete")
+	fmt.Println("PASS packaged binary: plugin/initialize identity, version, protocol 1 and complete 22-tool catalog")
 }

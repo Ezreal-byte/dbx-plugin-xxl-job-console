@@ -28,14 +28,7 @@ func TestLiveAdmin22(t *testing.T) {
 			s.close()
 		}
 	})
-	if !mcp(p, c, "list_jobs", nil).IsError {
-		t.Fatal("default permission unexpectedly enabled")
-	}
-	names := []string{}
-	for _, tool := range toolCatalog() {
-		names = append(names, tool.Name)
-	}
-	grant(t, p, c, names...)
+	connectFixture(t, p, c)
 	call := func(name string, args map[string]any) map[string]any {
 		t.Helper()
 		return resultObject(t, mcp(p, c, name, args))

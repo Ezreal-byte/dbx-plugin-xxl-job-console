@@ -308,11 +308,6 @@ func (p *plugin) mutation(s *session, name string, args map[string]any, token st
 		}
 		p.audit(s.conn.ID, name, resource, outcome, started)
 	}()
-	if automated {
-		if e := p.policyAllows(s.conn.ID, name); e != nil {
-			return nil, e
-		}
-	}
 	// A connection-specific OS lock serializes writes across UI and MCP sidecars.
 	release, e := p.lockMutation(s.conn.ID)
 	if e != nil {
@@ -370,11 +365,6 @@ func (p *plugin) mutation(s *session, name string, args map[string]any, token st
 	}
 	if time.Now().After(record.ExpiresAt) || record.SnapshotHash != digest(plan.Snapshot) {
 		return nil, errors.New("预览过期或目标配置已变化，请重新预览")
-	}
-	if automated {
-		if e = p.policyAllows(s.conn.ID, name); e != nil {
-			return nil, e
-		}
 	}
 	value, e = s.operation(plan.Method, params{Form: plan.Form, Confirmed: true})
 	if e != nil {

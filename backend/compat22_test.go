@@ -7,10 +7,7 @@ import (
 
 func TestAdmin22QueriesAndScheduleConstraints(t *testing.T) {
 	p, c, state := fixturePluginVersion(t, "2.2")
-	if !mcp(p, c, "list_jobs", nil).IsError || state.loginCount() != 0 {
-		t.Fatal("default deny must not log in")
-	}
-	grant(t, p, c, "list_jobs", "get_job", "preview_schedule", "get_overview", "read_log", "update_job", "create_job")
+	connectFixture(t, p, c)
 	for _, query := range []struct {
 		name string
 		args map[string]any

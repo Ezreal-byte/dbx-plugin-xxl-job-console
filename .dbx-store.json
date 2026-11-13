@@ -1,11 +1,11 @@
 {
   "name": "XXL-JOB Console",
-  "description": "Manage XXL-JOB tasks, logs and executors with DBX built-in AI and MCP, scoped permissions and confirmed operation previews.",
+  "description": "Manage XXL-JOB tasks, logs and executors with DBX built-in AI and MCP, DBX-managed tool access and confirmed operation previews.",
   "icon": "assets/plugin.svg",
   "tags": ["xxl-job", "scheduler", "jobs", "ai", "mcp"],
   "permissions": ["host.workbench", "host.ai"],
   "source": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "homepage": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "license": "MIT",
-  "releaseNotes": "0.4.3 restores external MCP tools on newer DBX hosts by declaring all 22 tool access levels and 5 toolsets, and adds fuzzy search to executor dropdowns with keyboard navigation. New jobs inherit the executor selected in job management, keeping installations with 1000+ executors usable. Keeps 2.2.x/2.3.x/3.4.x/3.5.x profiles, scoped permissions and preview-confirmed writes. Requires DBX 0.6.43+ and Host API ^1.4.0."
+  "releaseNotes": "0.4.4 makes DBX the single source of MCP authorization: the plugin-side AI/MCP switch and per-connection tool allowlist are removed, while manifest-declared tools and preview-confirmed writes remain. External MCP grants, access ceilings, tool opt-outs and connection scope are managed in DBX Settings → MCP → Capabilities. Also includes declared access for all 22 tools, keyboard-searchable executor dropdowns, and inherited executor filters. Requires DBX 0.6.60+ and Host API ^1.4.0."
 }

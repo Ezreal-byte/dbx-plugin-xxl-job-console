@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Workflow, ListTodo, Server, ScrollText, RefreshCw, Search, Plus, Pencil, Trash2, Play, Pause, FileText, ChevronLeft, ChevronRight, X, AlertTriangle, Check, Plug, ChartNoAxesCombined, Users, ArrowLeft, ExternalLink, Sparkles, Copy } from '@lucide/vue';
 import { invoke, type Context, type AiContext } from './bridge';
 import { type Job, type JobDetail, type Group, type JobOption, type LogRow, type Info, type Page, type Form, type LogChunk, newJob, newGroup, jobForm, groupForm, jobStatus, schedules, timeLabel, triggerMillis, filterTime, advanceLog } from './domain';
-import AutomationPanel from './AutomationPanel.vue';
 import JobDetailPanel from './JobDetailPanel.vue';
 import LoadingSkeleton from './LoadingSkeleton.vue';
 import { previewOperation, recommendations, logLookup, type Preview } from './automation';
@@ -69,7 +68,7 @@ let logTimer: ReturnType<typeof setTimeout> | undefined;
 const jobEditor = ref<Job>(), groupEditor = ref<Group>();
 const nodesJob = ref<Job>();
 const jobDetail = ref<JobDetail>(), detailTarget = ref<Job>(), detailBusy = ref(false), detailError = ref('');
-const automationOpen = ref(false), editorRevision = ref(''), groupRevision = ref('');
+const editorRevision = ref(''), groupRevision = ref('');
 const parameterMode = ref<'saved' | 'override'>('saved');
 const logSearch = ref('');
 const displayedLog = computed(() => !logSearch.value ? logState.value?.text || '' : (logState.value?.text || '').split('\n').filter(line => line.toLowerCase().includes(logSearch.value.toLowerCase())).join('\n'));
@@ -287,7 +286,7 @@ async function readLog() {
 }
 function keyboard(event: KeyboardEvent) {
   const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"]'); const top = dialogs[dialogs.length - 1]; if (!top) return;
-  if (event.defaultPrevented || automationOpen.value) return;
+  if (event.defaultPrevented) return;
   if (event.key === 'Escape' && !working.value) { event.preventDefault(); if (confirmation.value) confirmation.value = undefined; else if (discard.value) discard.value = false; else if (execution.value) execution.value = undefined; else if (detailTarget.value) closeJobDetail(); else if (detail.value) detail.value = undefined; else if (userEditor.value) userEditor.value = undefined; else closeEditor(); }
   if (event.key === 'Tab') { const elements = [...top.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]')]; const first = elements[0], last = elements[elements.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
 }
@@ -303,8 +302,8 @@ onBeforeUnmount(() => { void window.dbxPlugin?.ai?.clearRecommendations().catch(
 </script>
 
 <template>
-  <div class="shell" :inert="automationOpen">
-    <header class="workbench-nav"><nav :aria-label="t('主导航')"><button v-for="item in visibleNavigation" :key="item.key" :class="{ active: view === item.key && !logState }" :disabled="working || !!jobEditor || !!groupEditor || !!userEditor || optionsBusy" :title="t(item.label)" @click="changeView(item.key)"><component :is="item.icon" :size="15" /><span>{{ t(item.label) }}</span></button></nav><button v-if="info" class="ai-entry" @click="openAi"><Sparkles :size="15" />{{ t('AI 分析') }}</button><AutomationPanel v-if="info" :connection-id="connectionId" :name="info.name" :read-only="info.readOnly" :production="!!info.isProduction" :admin="info.admin" @opened="automationOpen = $event" /><div v-if="info" class="account-meta"><span><strong>{{ info.username }}</strong> · {{ info.admin ? t('管理员') : t('普通用户') }}<span v-if="info.readOnly"> · {{ t('只读') }}</span></span><code :title="info.baseUrl">{{ info.baseUrl }}</code></div></header>
+  <div class="shell">
+    <header class="workbench-nav"><nav :aria-label="t('主导航')"><button v-for="item in visibleNavigation" :key="item.key" :class="{ active: view === item.key && !logState }" :disabled="working || !!jobEditor || !!groupEditor || !!userEditor || optionsBusy" :title="t(item.label)" @click="changeView(item.key)"><component :is="item.icon" :size="15" /><span>{{ t(item.label) }}</span></button></nav><button v-if="info" class="ai-entry" @click="openAi"><Sparkles :size="15" />{{ t('AI 分析') }}</button><div v-if="info" class="account-meta"><span><strong>{{ info.username }}</strong> · {{ info.admin ? t('管理员') : t('普通用户') }}<span v-if="info.readOnly"> · {{ t('只读') }}</span></span><code :title="info.baseUrl">{{ info.baseUrl }}</code></div></header>
     <main :inert="!!jobEditor || !!groupEditor || !!userEditor || !!confirmation || !!discard || !!execution || !!detail || !!detailTarget">
       <div v-if="unknownResult" class="banner warning" role="alert"><AlertTriangle :size="18" /><span>{{ t('上次写入结果未知，请核对服务端状态后再操作。') }}</span><button @click="reconcileUnknown">{{ t('核对当前状态') }}</button><button class="icon" :aria-label="t('关闭')" @click="unknownResult = undefined"><X :size="16" /></button></div>
       <section v-if="logState" class="log-page"><header><button class="back-button" @click="backFromLog"><ArrowLeft :size="17" />{{ t('返回') }}</button><div><h1>{{ t('执行日志') }} #{{ logState.row.id }}</h1><span class="muted">{{ t('任务') }} #{{ logState.row.jobId }} · {{ timeLabel(logState.row.triggerTime) }}</span></div><div class="spacer" /><button :disabled="!canOpenTab" @click="newLogTab"><ExternalLink :size="15" />{{ t('新窗口查看') }}</button></header><div class="log-meta"><code>{{ logState.row.executorAddress }}</code><span class="badge" :class="logState.end ? 'success' : 'warning'">{{ t(logState.end ? '日志读取完成' : '等待日志 · 每 3 秒更新') }}</span></div><p v-if="error || logState.error" class="banner error" role="alert">{{ displayMessage(error || logState.error) }}</p><div class="log-tools"><input v-model="logSearch" type="search" :placeholder="t('搜索已加载日志')" :aria-label="t('搜索已加载日志')" /><button @click="copyLoadedLog"><Copy :size="15" />{{ t('复制') }}</button><button @click="openAi"><Sparkles :size="15" />{{ t('AI 分析') }}</button></div><pre ref="logContentRef" class="log-content" tabindex="0">{{ displayedLog || t(logState.busy ? '读取中' : '暂无日志内容') }}</pre><footer><span class="muted">{{ t('下一行') }} {{ logState.next }}</span><div class="spacer" /><label class="inline"><input v-model="logState.follow" type="checkbox" :disabled="logState.end" @change="scheduleLog" />{{ t('自动跟随') }}</label><button :disabled="logState.busy || logState.end" @click="readLog"><RefreshCw :size="15" />{{ t('读取后续') }}</button></footer></section>

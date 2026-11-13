@@ -22,6 +22,10 @@ type toolResult struct {
 	IsError bool                `json:"isError"`
 }
 
+func mcpTools() map[string]any {
+	return map[string]any{"tools": toolCatalog()}
+}
+
 var secretPattern = regexp.MustCompile(`(?i)((?:password|passwd|token|secret|authorization|api[_-]?key)\s*[=:]\s*)([^\s,;]+)`)
 
 func sanitize(value any) any {
@@ -159,9 +163,6 @@ func (p *plugin) mcpCall(raw json.RawMessage) toolResult {
 			p.audit(id, t.Name, resource, outcome, started)
 		}
 	}()
-	if e := p.policyAllows(id, t.Name); e != nil {
-		return resultOf(nil, e)
-	}
 	if t.Group != "query" && (in.Lifecycle.Connection.ReadOnly || in.Lifecycle.Connection.Config.ReadOnly) {
 		return resultOf(nil, errors.New("只读连接禁止修改"))
 	}
@@ -185,9 +186,6 @@ func (p *plugin) mcpCall(raw json.RawMessage) toolResult {
 	s.opContext = ctx
 	defer func() { s.opContext = nil }()
 	if e = s.active(); e != nil {
-		return resultOf(nil, e)
-	}
-	if e = p.policyAllows(id, t.Name); e != nil {
 		return resultOf(nil, e)
 	}
 	var value any

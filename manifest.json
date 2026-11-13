@@ -2,12 +2,12 @@
   "manifest_version": 1,
   "id": "io.dbx.xxljob-console",
   "name": "XXL-JOB Console",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "publisher": "ezreal-byte",
-  "description": "XXL-JOB task management with DBX AI, MCP, per-connection permissions and previewed operations",
+  "description": "XXL-JOB task management with DBX AI, MCP, DBX-managed tool access and previewed operations",
   "icon": "assets/plugin.svg",
   "permissions": ["host.workbench", "host.ai"],
-  "engines": { "dbx": ">=0.6.43", "host_api": "^1.4.0" },
+  "engines": { "dbx": ">=0.6.60", "host_api": "^1.4.0" },
   "entrypoints": {
     "backend": { "executable": "bin/dbx-plugin-xxl-job-dbx-plugin" },
     "ui": { "root": "ui", "entry": "ui/index.html" }
