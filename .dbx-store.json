@@ -7,5 +7,5 @@
   "source": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "homepage": "https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console",
   "license": "MIT",
-  "releaseNotes": "0.4.2 adds the explicit Admin 2.2.x profile, verified against official 2.2.0. Adapts jobCron and Cron preview while sharing workbench, AI/MCP and preview-confirmed writes. Hides unsupported scheduling choices and rejects incompatible parameters before preview. Keeps 2.3.x/3.4.x/3.5.x, scoped permissions and executor token protection. Select 2.2.x and /xxl-job-admin for a stock 2.2.0 deployment. Requires DBX 0.6.43+ and Host API ^1.4.0."
+  "releaseNotes": "0.4.3 declares MCP tool access levels in the plugin manifest so external MCP tools are visible again on DBX hosts that require tools/access (fixes undeclared tools). Keeps 2.2.x/2.3.x/3.4.x/3.5.x profiles, scoped permissions and preview-confirmed writes. Requires DBX 0.6.43+ and Host API ^1.4.0."
 }

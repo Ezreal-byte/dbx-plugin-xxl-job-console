@@ -32,6 +32,10 @@ Version `0.4.1` adds the explicit `3.5.x` profile, adapts executor/job names and
 
 Select **2.2.x** and set the context path to **/xxl-job-admin** for the official deployment. The adapter maps legacy `jobCron` to the shared job model and sends `cron` for server-side run-time previews. Workbench and AI/MCP use the same adapter and confirmation gates. Admin 2.2 only supports Cron scheduling and a fixed misfire policy: the editor hides unsupported choices, and the backend rejects `NONE`, `FIX_RATE` and `FIRE_ONCE_NOW` before issuing a preview. Normalized `DO_NOTHING` is a compatibility value, not a configurable 2.2 policy. See [0.4.2 release notes](RELEASE_NOTES_0.4.2.md) and [2.2.0 verification](docs/VERIFICATION_2.2.0.md).
 
+## 0.4.3: MCP tool access declarations
+
+Version `0.4.3` adds the required `tools` / `toolsets` access declarations to the MCP contribution in `manifest.json`. Newer DBX hosts hide every external tool that lacks an author-declared `access` level (`read` / `write` / `full`). See [0.4.3 release notes](RELEASE_NOTES_0.4.3.md) and [issue #7](https://github.com/Ezreal-byte/dbx-plugin-xxl-job-console/issues/7).
+
 ## Connect
 
 Requires DBX `0.6.43` or newer, Host API `^1.4.0`. Enter the Admin IP/domain, port, username and password. New connections select `3.4.x` and `/` by default, matching the official 3.4.2 configuration. For stock `2.2.x` or `2.3.x`, select that version and change the application path to `/xxl-job-admin`. If the Admin is deployed at a custom path, enter that path instead. HTTPS and DBX SSH/proxy/HTTP tunnels are supported. HTTP transmits the login password in clear text: use it only on a trusted private network.
@@ -61,7 +65,7 @@ npm run build
 go -C backend test -race ./...
 go -C backend vet ./...
 npm run package:all
-go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.4.2-windows-x64.dbxp --handshake
+go run scripts/verify-package.go dist/io.dbx.xxljob-console-0.4.3-windows-x64.dbxp --handshake
 ```
 
 `package:all` builds independent native sidecars for macOS, Windows and Linux, both ARM64 and x64. It emits six unsigned `.dbxp` candidates, their `.artifact.json` metadata, a versioned `SHA256SUMS` file and `release-candidates.json`. Cross-platform packages are architecture and checksum checked, not claimed as tested in a DBX desktop on every OS. These unsigned packages are review candidates: normal marketplace installation requires DBX Store review and signing.

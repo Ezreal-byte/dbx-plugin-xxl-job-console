@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "io.dbx.xxljob-console",
   "name": "XXL-JOB Console",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "publisher": "ezreal-byte",
   "description": "XXL-JOB task management with DBX AI, MCP, per-connection permissions and previewed operations",
   "icon": "assets/plugin.svg",
@@ -48,7 +48,43 @@
       "label": "执行日志",
       "icon": "assets/plugin.svg"
     },
-    { "type": "mcp", "id": "io.dbx.xxljob-console.mcp", "ai_tools": true, "external_tools": true }
+    {
+      "type": "mcp",
+      "id": "io.dbx.xxljob-console.mcp",
+      "ai_tools": true,
+      "external_tools": true,
+      "toolsets": [
+        { "id": "query", "title": "Query & diagnostics", "description": "Read-only connection, job, executor, log and schedule preview tools" },
+        { "id": "schedule", "title": "Schedule actions", "description": "Start, stop and trigger jobs with preview confirmation" },
+        { "id": "jobs", "title": "Job configuration", "description": "Create, update and copy BEAN jobs with preview confirmation" },
+        { "id": "delete", "title": "Delete jobs", "description": "Delete jobs with preview confirmation" },
+        { "id": "executors", "title": "Executor management", "description": "Admin create, update and delete executors with preview confirmation" }
+      ],
+      "tools": {
+        "connection_info": { "toolset": "query", "access": "read" },
+        "get_overview": { "toolset": "query", "access": "read" },
+        "list_jobs": { "toolset": "query", "access": "read" },
+        "get_job": { "toolset": "query", "access": "read" },
+        "list_executors": { "toolset": "query", "access": "read" },
+        "get_executor": { "toolset": "query", "access": "read" },
+        "list_logs": { "toolset": "query", "access": "read" },
+        "get_log": { "toolset": "query", "access": "read" },
+        "read_log": { "toolset": "query", "access": "read" },
+        "preview_schedule": { "toolset": "query", "access": "read" },
+        "get_job_diagnostics": { "toolset": "query", "access": "read" },
+        "list_calls": { "toolset": "query", "access": "read" },
+        "start_job": { "toolset": "schedule", "access": "write" },
+        "stop_job": { "toolset": "schedule", "access": "write" },
+        "trigger_job": { "toolset": "schedule", "access": "write" },
+        "create_job": { "toolset": "jobs", "access": "write" },
+        "update_job": { "toolset": "jobs", "access": "write" },
+        "copy_job": { "toolset": "jobs", "access": "write" },
+        "delete_job": { "toolset": "delete", "access": "full" },
+        "create_executor": { "toolset": "executors", "access": "write" },
+        "update_executor": { "toolset": "executors", "access": "write" },
+        "delete_executor": { "toolset": "executors", "access": "full" }
+      }
+    }
   ],
   "localizations": {
     "en": { "contributions": {
